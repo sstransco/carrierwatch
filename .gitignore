@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.production
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/
+*.csv
+*.zip
+*.sql.gz
+.DS_Store
+postgres_data/
+.claude/

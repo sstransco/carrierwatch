@@ -1,0 +1,25 @@
+# Martin Vector Tile Server Configuration
+# Connects to PostGIS and serves MVT tiles for Mapbox GL JS
+
+# PostgreSQL connection
+postgres:
+  connection_string: ${DATABASE_URL:-postgresql://carrierwatch:carrierwatch_dev_2024@postgres:5432/carrierwatch}
+
+  # Auto-discover tables with geometry columns
+  auto_publish:
+    tables:
+      from_schemas: public
+
+  # Function-based tile sources for optimized queries
+  functions:
+    carriers_mvt:
+      schema: public
+      function: carriers_mvt
+      minzoom: 4
+      maxzoom: 16
+
+    address_clusters_mvt:
+      schema: public
+      function: address_clusters_mvt
+      minzoom: 0
+      maxzoom: 14

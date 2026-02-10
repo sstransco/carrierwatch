@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS cdl_schools (
 
 CREATE INDEX IF NOT EXISTS idx_cdl_schools_state ON cdl_schools(state);
 CREATE INDEX IF NOT EXISTS idx_cdl_schools_location ON cdl_schools USING gist(location);
+CREATE INDEX IF NOT EXISTS idx_cdl_schools_location_geom ON cdl_schools USING gist((location::geometry)) WHERE location IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_cdl_schools_location_geom ON cdl_schools USING gist((location::geometry)) WHERE location IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_cdl_schools_address_hash ON cdl_schools(address_hash);
 
 -- ==========================================

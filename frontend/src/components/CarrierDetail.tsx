@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import type { CarrierDetail as CarrierDetailType, Principal, BatchCarrier } from "../types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 function statusClass(status: string | null): string {
   if (!status) return "";
@@ -42,10 +42,96 @@ function formatFlag(flag: string): string {
     .replace("ELD VIOLATIONS 5 PLUS", "5+ ELD/HOS violations");
 }
 
+const WEATHER: Record<number, string> = {
+  1: "Clear", 2: "Rain", 3: "Sleet/Hail", 4: "Snow",
+  5: "Fog/Smoke", 6: "Crosswinds", 7: "Blowing Sand", 8: "Other", 9: "Unknown",
+};
+const LIGHTING: Record<number, string> = {
+  1: "Daylight", 2: "Dark (Unlit)", 3: "Dark (Lit)", 4: "Dawn",
+  5: "Dusk", 6: "Unknown", 8: "Other", 9: "Unknown",
+};
+const ROAD_SURFACE: Record<number, string> = {
+  1: "Dry", 2: "Wet", 3: "Snow/Slush", 4: "Ice",
+  5: "Sand/Dirt/Oil", 6: "Standing Water", 7: "Muddy", 8: "Other", 9: "Unknown",
+};
+
+interface CrashRecord {
+  crash_id: number;
+  date: string;
+  city: string;
+  state: string;
+  location: string | null;
+  fatalities: number;
+  injuries: number;
+  tow_away: number;
+  hazmat_released: boolean;
+  federal_recordable: boolean;
+  weather: number | null;
+  lighting: number | null;
+  road_surface: number | null;
+}
+
+function CrashesTable({ items }: { items: CrashRecord[] }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  return (
+    <div className="history-scroll"><table className="history-table">
+      <thead><tr><th>Date</th><th>Location</th><th>Fatal</th><th>Injuries</th><th>Tow</th><th>HazMat</th><th></th></tr></thead>
+      <tbody>
+        {items.map((r, i) => {
+          const isExpanded = expandedId === i;
+          return (
+            <Fragment key={i}>
+              <tr
+                onClick={() => setExpandedId(isExpanded ? null : i)}
+                style={{
+                  cursor: "pointer",
+                  ...(r.fatalities > 0 ? { background: "rgba(239,68,68,0.12)" } : {}),
+                }}
+              >
+                <td>{r.date || "\u2014"}</td>
+                <td>{r.city}{r.state ? `, ${r.state}` : ""}</td>
+                <td style={r.fatalities > 0 ? { color: "var(--danger)", fontWeight: 700 } : undefined}>{r.fatalities}</td>
+                <td style={r.injuries > 0 ? { color: "var(--warning)" } : undefined}>{r.injuries}</td>
+                <td>{r.tow_away}</td>
+                <td>{r.hazmat_released ? "YES" : "\u2014"}</td>
+                <td style={{ color: "var(--text-secondary)", fontSize: 11 }}>{isExpanded ? "\u25B2" : "\u25BC"}</td>
+              </tr>
+              {isExpanded && (
+                <tr style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <td colSpan={7} style={{ padding: "8px 12px" }}>
+                    <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13 }}>
+                      {r.weather != null && (
+                        <div><span style={{ color: "var(--text-secondary)" }}>Weather: </span><span style={{ fontWeight: 500 }}>{WEATHER[r.weather] || `Code ${r.weather}`}</span></div>
+                      )}
+                      {r.lighting != null && (
+                        <div><span style={{ color: "var(--text-secondary)" }}>Lighting: </span><span style={{ fontWeight: 500 }}>{LIGHTING[r.lighting] || `Code ${r.lighting}`}</span></div>
+                      )}
+                      {r.road_surface != null && (
+                        <div><span style={{ color: "var(--text-secondary)" }}>Road: </span><span style={{ fontWeight: 500 }}>{ROAD_SURFACE[r.road_surface] || `Code ${r.road_surface}`}</span></div>
+                      )}
+                      {r.location && (
+                        <div><span style={{ color: "var(--text-secondary)" }}>Location: </span><span style={{ fontWeight: 500 }}>{r.location}</span></div>
+                      )}
+                      {r.federal_recordable && (
+                        <div><span style={{ color: "var(--danger)", fontWeight: 600 }}>Federal Recordable</span></div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        })}
+      </tbody>
+    </table></div>
+  );
+}
+
 type HistoryTab = "inspections" | "violations" | "crashes" | "authority" | "insurance";
 
-function HistoryTabs({ dotNumber }: { dotNumber: number }) {
-  const [tab, setTab] = useState<HistoryTab>("inspections");
+function HistoryTabs({ dotNumber, tab, onTabChange }: { dotNumber: number; tab: HistoryTab; onTabChange: (t: HistoryTab) => void }) {
+  const setTab = onTabChange;
   const [data, setData] = useState<Record<HistoryTab, unknown[] | null>>({
     inspections: null, violations: null, crashes: null, authority: null, insurance: null,
   });
@@ -121,21 +207,7 @@ function HistoryTabs({ dotNumber }: { dotNumber: number }) {
             </tbody>
           </table></div>
         ) : tab === "crashes" ? (
-          <div className="history-scroll"><table className="history-table">
-            <thead><tr><th>Date</th><th>Location</th><th>Fatal</th><th>Injuries</th><th>Tow</th><th>HazMat</th></tr></thead>
-            <tbody>
-              {(items as { date: string; city: string; state: string; fatalities: number; injuries: number; tow_away: number; hazmat_released: boolean }[]).map((r, i) => (
-                <tr key={i} style={r.fatalities > 0 ? { background: "rgba(239,68,68,0.12)" } : undefined}>
-                  <td>{r.date || "\u2014"}</td>
-                  <td>{r.city}{r.state ? `, ${r.state}` : ""}</td>
-                  <td style={r.fatalities > 0 ? { color: "var(--danger)", fontWeight: 700 } : undefined}>{r.fatalities}</td>
-                  <td style={r.injuries > 0 ? { color: "var(--warning)" } : undefined}>{r.injuries}</td>
-                  <td>{r.tow_away}</td>
-                  <td>{r.hazmat_released ? "YES" : "\u2014"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
+          <CrashesTable items={items as CrashRecord[]} />
         ) : tab === "authority" ? (
           <div className="history-scroll">
             {(items as { docket_number: string; legal_name: string; common_authority: string; contract_authority: string; broker_authority: string; common_rev_pending: boolean; contract_rev_pending: boolean; broker_rev_pending: boolean; property: boolean; passenger: boolean; household_goods: boolean; address: string; city: string; state: string; zip: string }[]).map((r, i) => (
@@ -277,7 +349,14 @@ function PrincipalsSection({ dotNumber }: { dotNumber: number }) {
           <tbody>
             {principals.map((p, i) => (
               <tr key={i} style={p.other_carrier_count >= 5 ? { background: "rgba(239,68,68,0.08)" } : undefined}>
-                <td style={{ fontWeight: 500 }}>{p.officer_name}</td>
+                <td style={{ fontWeight: 500 }}>
+                  {p.other_carrier_count >= 2 ? (
+                    <Link to={`/network/${encodeURIComponent(p.officer_name)}`} style={{ color: "var(--text-primary)", textDecoration: "none" }}>
+                      {p.officer_name}
+                      <span style={{ marginLeft: 6, fontSize: 10, color: "var(--accent)", verticalAlign: "middle" }} title="View network graph">&#x1f578;</span>
+                    </Link>
+                  ) : p.officer_name}
+                </td>
                 <td>{p.position || "\u2014"}</td>
                 <td style={{ fontSize: 12 }}>{p.phone || "\u2014"}</td>
                 <td style={{ fontSize: 12 }}>{p.email || "\u2014"}</td>
@@ -357,6 +436,12 @@ export default function CarrierDetailPage() {
   }
 
   const risk = riskLevel(carrier.risk_score);
+  const [activeHistoryTab, setActiveHistoryTab] = useState<HistoryTab>("inspections");
+
+  const scrollToCrashes = () => {
+    setActiveHistoryTab("crashes");
+    document.getElementById("history-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="detail-page">
@@ -416,9 +501,9 @@ export default function CarrierDetailPage() {
         <div className="detail-card">
           <h3>Inspection & Crash Data</h3>
           <div className="detail-row"><span className="label">Total Inspections</span><span className="value">{carrier.total_inspections}</span></div>
-          <div className="detail-row"><span className="label">Total Crashes</span><span className="value">{carrier.total_crashes}</span></div>
-          <div className="detail-row"><span className="label">Fatal Crashes</span><span className="value" style={{ color: carrier.fatal_crashes > 0 ? "var(--danger)" : undefined }}>{carrier.fatal_crashes}</span></div>
-          <div className="detail-row"><span className="label">Injury Crashes</span><span className="value">{carrier.injury_crashes}</span></div>
+          <div className="detail-row"><span className="label">Total Crashes</span><span className="value">{carrier.total_crashes > 0 ? <button onClick={scrollToCrashes} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>{carrier.total_crashes}</button> : "0"}</span></div>
+          <div className="detail-row"><span className="label">Fatal Crashes</span><span className="value">{carrier.fatal_crashes > 0 ? <button onClick={scrollToCrashes} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 700, textDecoration: "underline" }}>{carrier.fatal_crashes}</button> : "0"}</span></div>
+          <div className="detail-row"><span className="label">Injury Crashes</span><span className="value">{carrier.injury_crashes > 0 ? <button onClick={scrollToCrashes} style={{ background: "none", border: "none", color: "var(--warning)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>{carrier.injury_crashes}</button> : "0"}</span></div>
           <div className="detail-row"><span className="label">Vehicle OOS Rate</span><span className="value">{carrier.vehicle_oos_rate.toFixed(1)}%</span></div>
           <div className="detail-row"><span className="label">Driver OOS Rate</span><span className="value">{carrier.driver_oos_rate.toFixed(1)}%</span></div>
           <div className="detail-row"><span className="label">HazMat OOS Rate</span><span className="value">{carrier.hazmat_oos_rate.toFixed(1)}%</span></div>
@@ -444,7 +529,9 @@ export default function CarrierDetailPage() {
       <PrincipalsSection dotNumber={carrier.dot_number} />
 
       {/* History Tabs */}
-      <HistoryTabs dotNumber={carrier.dot_number} />
+      <div id="history-section">
+        <HistoryTabs dotNumber={carrier.dot_number} tab={activeHistoryTab} onTabChange={setActiveHistoryTab} />
+      </div>
 
       {/* PPP Loans Section */}
       {carrier.ppp_loan_count > 0 && (

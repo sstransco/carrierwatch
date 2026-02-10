@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from database import close_pool, init_pool
-from routers import addresses, carriers, cdl_schools, history, principals, stats
+from routers import addresses, carriers, cdl_schools, history, network, principals, spotlight, stats
 
 
 @asynccontextmanager
@@ -57,6 +57,8 @@ app.include_router(stats.router)
 app.include_router(history.router)
 app.include_router(principals.router)
 app.include_router(cdl_schools.router)
+app.include_router(network.router)
+app.include_router(spotlight.router)
 
 
 @app.get("/health")

@@ -74,7 +74,9 @@ async def top_principals(
             """
             SELECT occ.officer_name_normalized,
                    occ.carrier_count,
-                   occ.dot_numbers
+                   occ.dot_numbers,
+                   occ.total_risk_score,
+                   occ.statuses
             FROM officer_carrier_counts occ
             WHERE occ.carrier_count >= $1
             ORDER BY occ.carrier_count DESC
@@ -87,8 +89,8 @@ async def top_principals(
         {
             "officer_name": r["officer_name_normalized"],
             "carrier_count": r["carrier_count"],
-            "statuses": list(set(s for s in r["statuses"] if s)) if "statuses" in r.keys() else [],
-            "total_risk": r.get("total_risk") or 0,
+            "statuses": list(set(s for s in r.get("statuses", []) or [] if s)),
+            "total_risk": r.get("total_risk") or r.get("total_risk_score") or 0,
             "dot_numbers": list(r["dot_numbers"][:25]),
         }
         for r in rows

@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS carriers (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_carriers_location ON carriers USING GIST (location);
+CREATE INDEX IF NOT EXISTS idx_carriers_location_geom ON carriers USING GIST ((location::geometry)) WHERE location IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_carriers_mc_number ON carriers (mc_number);
 CREATE INDEX IF NOT EXISTS idx_carriers_state ON carriers (physical_state);
 CREATE INDEX IF NOT EXISTS idx_carriers_status ON carriers (operating_status);
@@ -110,6 +111,7 @@ HAVING COUNT(*) >= 2;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_address_clusters_hash ON address_clusters (address_hash);
 CREATE INDEX IF NOT EXISTS idx_address_clusters_centroid ON address_clusters USING GIST (centroid);
+CREATE INDEX IF NOT EXISTS idx_address_clusters_centroid_geom ON address_clusters USING GIST ((centroid::geometry)) WHERE centroid IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_address_clusters_count ON address_clusters (carrier_count DESC);
 CREATE INDEX IF NOT EXISTS idx_address_clusters_state ON address_clusters (state);
 

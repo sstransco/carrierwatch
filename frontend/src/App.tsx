@@ -6,19 +6,15 @@ import LayerToggle from "./components/LayerToggle";
 import type { MapLayer, StatsResponse } from "./types";
 import type mapboxgl from "mapbox-gl";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 const DEFAULT_LAYERS: MapLayer[] = [
-  { id: "county-fill-carriers", label: "Counties (Carriers)", visible: true },
-  { id: "county-fill-risk", label: "Counties (Risk)", visible: false },
-  { id: "risk", label: "Risk Overlay", visible: false },
+  { id: "risk", label: "Risk Overlay", visible: true },
   { id: "clusters", label: "Address Clusters", visible: true },
   { id: "carriers", label: "Individual Carriers", visible: false },
   { id: "heatmap", label: "Heatmap", visible: false },
   { id: "cdl-schools", label: "CDL Schools", visible: true },
 ];
-
-const COUNTY_FILL_LAYERS = new Set(["county-fill-carriers", "county-fill-risk"]);
 
 export default function App() {
   const [layers, setLayers] = useState<MapLayer[]>(DEFAULT_LAYERS);
@@ -36,15 +32,7 @@ export default function App() {
 
   const handleLayerToggle = useCallback((layerId: string) => {
     setLayers((prev) =>
-      prev.map((l) => {
-        if (l.id === layerId) return { ...l, visible: !l.visible };
-        // County fills are mutually exclusive — turning one on turns the other off
-        if (COUNTY_FILL_LAYERS.has(layerId) && COUNTY_FILL_LAYERS.has(l.id)) {
-          const target = prev.find((p) => p.id === layerId);
-          if (target && !target.visible) return { ...l, visible: false };
-        }
-        return l;
-      })
+      prev.map((l) => l.id === layerId ? { ...l, visible: !l.visible } : l)
     );
   }, []);
 
@@ -68,6 +56,7 @@ export default function App() {
         </a>
         <a href="/principals" className="topbar-link">Officers</a>
         <a href="/cdl-schools" className="topbar-link">CDL Schools</a>
+        <a href="/spotlight" className="topbar-link topbar-link-accent">Spotlight</a>
         <a href="/about" className="topbar-link">About</a>
         <a href="https://x.com/sigma2transport" target="_blank" rel="noopener" className="topbar-link">Follow Us</a>
         <SearchBar onFlyTo={handleFlyTo} />

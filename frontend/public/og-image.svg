@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1117"/>
+      <stop offset="100%" style="stop-color:#1a1d27"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="0" y="620" width="1200" height="10" fill="url(#accent)"/>
+
+  <!-- Grid dots background -->
+  <g opacity="0.08" fill="#3b82f6">
+    <circle cx="100" cy="100" r="2"/><circle cx="200" cy="100" r="2"/><circle cx="300" cy="100" r="2"/><circle cx="400" cy="100" r="2"/><circle cx="500" cy="100" r="2"/><circle cx="600" cy="100" r="2"/><circle cx="700" cy="100" r="2"/><circle cx="800" cy="100" r="2"/><circle cx="900" cy="100" r="2"/><circle cx="1000" cy="100" r="2"/><circle cx="1100" cy="100" r="2"/>
+    <circle cx="100" cy="200" r="2"/><circle cx="200" cy="200" r="2"/><circle cx="300" cy="200" r="2"/><circle cx="400" cy="200" r="2"/><circle cx="500" cy="200" r="2"/><circle cx="600" cy="200" r="2"/><circle cx="700" cy="200" r="2"/><circle cx="800" cy="200" r="2"/><circle cx="900" cy="200" r="2"/><circle cx="1000" cy="200" r="2"/><circle cx="1100" cy="200" r="2"/>
+    <circle cx="100" cy="300" r="2"/><circle cx="200" cy="300" r="2"/><circle cx="300" cy="300" r="2"/><circle cx="400" cy="300" r="2"/><circle cx="500" cy="300" r="2"/><circle cx="600" cy="300" r="2"/><circle cx="700" cy="300" r="2"/><circle cx="800" cy="300" r="2"/><circle cx="900" cy="300" r="2"/><circle cx="1000" cy="300" r="2"/><circle cx="1100" cy="300" r="2"/>
+    <circle cx="100" cy="400" r="2"/><circle cx="200" cy="400" r="2"/><circle cx="300" cy="400" r="2"/><circle cx="400" cy="400" r="2"/><circle cx="500" cy="400" r="2"/><circle cx="600" cy="400" r="2"/><circle cx="700" cy="400" r="2"/><circle cx="800" cy="400" r="2"/><circle cx="900" cy="400" r="2"/><circle cx="1000" cy="400" r="2"/><circle cx="1100" cy="400" r="2"/>
+    <circle cx="100" cy="500" r="2"/><circle cx="200" cy="500" r="2"/><circle cx="300" cy="500" r="2"/><circle cx="400" cy="500" r="2"/><circle cx="500" cy="500" r="2"/><circle cx="600" cy="500" r="2"/><circle cx="700" cy="500" r="2"/><circle cx="800" cy="500" r="2"/><circle cx="900" cy="500" r="2"/><circle cx="1000" cy="500" r="2"/><circle cx="1100" cy="500" r="2"/>
+  </g>
+
+  <!-- Danger nodes -->
+  <g opacity="0.15">
+    <circle cx="850" cy="200" r="60" fill="#ef4444"/>
+    <circle cx="950" cy="350" r="40" fill="#f59e0b"/>
+    <circle cx="750" cy="400" r="30" fill="#ef4444"/>
+    <circle cx="1000" cy="180" r="20" fill="#f59e0b"/>
+  </g>
+
+  <!-- Connection lines -->
+  <g stroke="#3b82f6" stroke-width="1" opacity="0.12">
+    <line x1="850" y1="200" x2="950" y2="350"/>
+    <line x1="850" y1="200" x2="750" y2="400"/>
+    <line x1="950" y1="350" x2="750" y2="400"/>
+    <line x1="850" y1="200" x2="1000" y2="180"/>
+    <line x1="950" y1="350" x2="1000" y2="180"/>
+  </g>
+
+  <!-- Title -->
+  <text x="80" y="240" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="64" font-weight="800" fill="#e4e6ed">
+    Carrier<tspan fill="#3b82f6">Watch</tspan>
+  </text>
+
+  <!-- Subtitle -->
+  <text x="80" y="300" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="24" fill="#9498a8" font-weight="500">
+    4.3 Million FMCSA Carriers. Exposed.
+  </text>
+
+  <!-- Stats row -->
+  <g font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+    <text x="80" y="400" font-size="16" fill="#6b7084" font-weight="500" text-transform="uppercase" letter-spacing="1">
+      <tspan fill="#ef4444" font-size="22" font-weight="800">240K+</tspan>
+      <tspan dx="6" fill="#9498a8">HIGH RISK</tspan>
+      <tspan dx="30" fill="#f59e0b" font-size="22" font-weight="800">564K</tspan>
+      <tspan dx="6" fill="#9498a8">PPP MATCHED</tspan>
+      <tspan dx="30" fill="#3b82f6" font-size="22" font-weight="800">3.4M</tspan>
+      <tspan dx="6" fill="#9498a8">OFFICERS LINKED</tspan>
+    </text>
+  </g>
+
+  <!-- URL -->
+  <text x="80" y="560" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="20" fill="#3b82f6" font-weight="600">
+    carrier.watch
+  </text>
+  <text x="80" y="585" font-family="-apple-system, BlinkMacSystemFont, sans-serif" font-size="14" fill="#6b7084">
+    Public FMCSA data cross-referenced with PPP loans, officer networks, and crash histories
+  </text>
+</svg>

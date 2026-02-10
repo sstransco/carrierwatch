@@ -9,6 +9,8 @@ const AddressDetailPage = lazy(() => import("./components/AddressDetail"));
 const AboutPage = lazy(() => import("./components/About"));
 const PrincipalsLeaderboard = lazy(() => import("./components/PrincipalsLeaderboard"));
 const CDLSchoolsPage = lazy(() => import("./components/CDLSchools"));
+const NetworkGraphPage = lazy(() => import("./components/NetworkGraph"));
+const FraudSpotlightPage = lazy(() => import("./components/FraudSpotlight"));
 
 const Loading = () => (
   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#0a0a0a", color: "#888" }}>
@@ -26,6 +28,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/address/:addressHash" element={<AddressDetailPage />} />
           <Route path="/principals" element={<PrincipalsLeaderboard />} />
           <Route path="/cdl-schools" element={<CDLSchoolsPage />} />
+          <Route path="/network/:officerName" element={<NetworkGraphPage />} />
+          <Route path="/network" element={<NetworkGraphPage />} />
+          <Route path="/spotlight" element={<FraudSpotlightPage />} />
           <Route path="/about" element={<AboutPage />} />
         </Routes>
       </Suspense>

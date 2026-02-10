@@ -1,7 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { API_URL } from "../hooks/useApi";
 import type { PrincipalLeaderboardEntry } from "../types";
+
+function DotNumbersList({ dots }: { dots: number[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? dots : dots.slice(0, 5);
+  const remaining = dots.length - 5;
+
+  return (
+    <>
+      {shown.map((d, j) => (
+        <span key={d}>
+          {j > 0 && ", "}
+          <Link to={`/carrier/${d}`} style={{ color: "var(--accent)" }}>{d}</Link>
+        </span>
+      ))}
+      {remaining > 0 && !expanded && (
+        <span
+          onClick={() => setExpanded(true)}
+          style={{ color: "var(--accent)", cursor: "pointer", marginLeft: 4 }}
+        >
+          +{remaining} more
+        </span>
+      )}
+      {expanded && remaining > 0 && (
+        <span
+          onClick={() => setExpanded(false)}
+          style={{ color: "var(--text-secondary)", cursor: "pointer", marginLeft: 4, fontSize: 11 }}
+        >
+          (collapse)
+        </span>
+      )}
+    </>
+  );
+}
 
 const STATES = [
   "", "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -114,18 +147,17 @@ export default function PrincipalsLeaderboard() {
               <tbody>
                 {searchResults.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ fontWeight: 500 }}>{r.officer_name}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      <Link to={`/network/${encodeURIComponent(r.officer_name)}`} style={{ color: "var(--text-primary)", textDecoration: "none" }}>
+                        {r.officer_name}
+                        {r.carrier_count >= 5 && <span style={{ marginLeft: 6, fontSize: 10, color: "var(--accent)", verticalAlign: "middle" }} title="View network graph">&#x1f578;</span>}
+                      </Link>
+                    </td>
                     <td style={r.carrier_count >= 10 ? { color: "var(--danger)", fontWeight: 700 } : r.carrier_count >= 5 ? { color: "var(--warning)" } : undefined}>
                       {r.carrier_count}
                     </td>
                     <td>
-                      {r.dot_numbers.slice(0, 5).map((d, j) => (
-                        <span key={d}>
-                          {j > 0 && ", "}
-                          <Link to={`/carrier/${d}`} style={{ color: "var(--accent)" }}>{d}</Link>
-                        </span>
-                      ))}
-                      {r.dot_numbers.length > 5 && <span style={{ color: "var(--text-secondary)" }}> +{r.dot_numbers.length - 5} more</span>}
+                      <DotNumbersList dots={r.dot_numbers} />
                     </td>
                   </tr>
                 ))}
@@ -216,7 +248,12 @@ export default function PrincipalsLeaderboard() {
               {entries.map((e, i) => (
                 <tr key={i} style={e.carrier_count >= 25 ? { background: "rgba(239,68,68,0.08)" } : e.carrier_count >= 10 ? { background: "rgba(245,158,11,0.06)" } : undefined}>
                   <td style={{ fontWeight: 700, color: "var(--text-secondary)" }}>{i + 1}</td>
-                  <td style={{ fontWeight: 500 }}>{e.officer_name}</td>
+                  <td style={{ fontWeight: 500 }}>
+                    <Link to={`/network/${encodeURIComponent(e.officer_name)}`} style={{ color: "var(--text-primary)", textDecoration: "none" }}>
+                      {e.officer_name}
+                      {e.carrier_count >= 5 && <span style={{ marginLeft: 6, fontSize: 10, color: "var(--accent)", verticalAlign: "middle" }} title="View network graph">&#x1f578;</span>}
+                    </Link>
+                  </td>
                   <td style={e.carrier_count >= 25 ? { color: "var(--danger)", fontWeight: 700 } : e.carrier_count >= 10 ? { color: "var(--warning)", fontWeight: 600 } : undefined}>
                     {e.carrier_count}
                   </td>
@@ -239,13 +276,7 @@ export default function PrincipalsLeaderboard() {
                     ))}
                   </td>
                   <td>
-                    {e.dot_numbers.slice(0, 5).map((d, j) => (
-                      <span key={d}>
-                        {j > 0 && ", "}
-                        <Link to={`/carrier/${d}`} style={{ color: "var(--accent)" }}>{d}</Link>
-                      </span>
-                    ))}
-                    {e.dot_numbers.length > 5 && <span style={{ color: "var(--text-secondary)" }}> +{e.dot_numbers.length - 5} more</span>}
+                    <DotNumbersList dots={e.dot_numbers} />
                   </td>
                 </tr>
               ))}

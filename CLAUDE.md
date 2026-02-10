@@ -154,9 +154,34 @@ REFRESH MATERIALIZED VIEW officer_carrier_counts;
 1. Create or edit router in `backend/routers/`
 2. Register in `backend/main.py` with `app.include_router()`
 
-**Production deploy:**
+**Production deploy (from Desktop/CARRIERWATCH):**
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+# 1. Rsync to server (always exclude .env to protect prod secrets)
+rsync -avz --progress -e "ssh -i ~/.ssh/carrierwatch" \
+  --exclude 'node_modules' --exclude '.git' --exclude 'data/' \
+  --exclude 'postgres_data' --exclude '__pycache__' --exclude '.env' --exclude 'venv' \
+  ./ root@64.23.142.235:/opt/carrierwatch/
+
+# 2. Rebuild and restart on server
+ssh -i ~/.ssh/carrierwatch root@64.23.142.235 "cd /opt/carrierwatch && \
+  docker compose -f docker-compose.prod.yml build --no-cache frontend && \
+  docker compose -f docker-compose.prod.yml up -d frontend && \
+  docker compose -f docker-compose.prod.yml restart nginx"
+
+# For backend changes, replace 'frontend' with 'backend' (or omit service name to rebuild all)
+# ALWAYS restart nginx after rebuilding — it caches DNS at startup
+```
+
+**SSH access:** `ssh -i ~/.ssh/carrierwatch root@64.23.142.235` (dedicated key)
+**Server path:** `/opt/carrierwatch`
+**Domain:** carrier.watch (Cloudflare DNS/CDN → DigitalOcean 64.23.142.235)
+
+**Git (from Documents/CARRIERWATCH):**
+```bash
+# Commit and push (Documents repo is the git repo, Desktop is the deploy source)
+cd /Users/maxwell/Documents/CARRIERWATCH
+git add -A && git commit -m "description"
+git push origin main
 ```
 
 ## Known Pitfalls
@@ -179,3 +204,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 **Stats endpoint:** Under heavy IO, the stats query can be slow. Uses 5-min in-memory cache and a single combined query with PostgreSQL `FILTER (WHERE ...)` expressions instead of sequential COUNTs.
 
 **Nginx tile caching:** Martin tiles cached 2h at nginx layer (`/tiles/*` → martin with `proxy_cache`). API responses cached 5min. Both use `stale` on error/timeout.
+
+**MVT spatial indexes:** The `location`/`centroid` columns are `geography` type, but MVT functions cast them to `::geometry`. A GIST index on the geography column does NOT help — you need expression indexes on `(column::geometry)`. All three exist: `idx_carriers_location_geom`, `idx_address_clusters_centroid_geom`, `idx_cdl_schools_location_geom`. Without these, tile queries do full table scans on 4.39M rows.
+
+**Tile URLs must be absolute:** Mapbox GL JS web workers can't resolve relative URLs. The frontend TILES_URL IIFE ensures URLs always start with `https://` by prepending `window.location.origin` when `VITE_TILES_URL` isn't set or is relative.

@@ -86,6 +86,13 @@ body {
   color: var(--text-primary);
   background: var(--bg-tertiary);
 }
+.topbar-link-accent {
+  color: var(--warning);
+  font-weight: 600;
+}
+.topbar-link-accent:hover {
+  color: #fbbf24;
+}
 
 .main-content {
   display: flex;

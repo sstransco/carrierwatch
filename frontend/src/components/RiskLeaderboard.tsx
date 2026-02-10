@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TopRiskCarrier } from "../types";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 const STATES = [
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",

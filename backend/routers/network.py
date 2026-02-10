@@ -7,11 +7,31 @@ from database import get_conn
 router = APIRouter(prefix="/api/network", tags=["network"])
 
 
+@router.get("/officer/{officer_name}/clusters")
+async def officer_clusters(officer_name: str):
+    """Return identity clusters for an officer name."""
+    pool = await get_conn()
+    name_norm = officer_name.strip().lower()
+    rows = await pool.fetch(
+        """
+        SELECT cluster_index, carrier_count, link_signals,
+               total_crashes, fatal_crashes, total_units,
+               avg_risk_score, states
+        FROM officer_network_clusters
+        WHERE officer_name_normalized = $1
+        ORDER BY carrier_count DESC
+        """,
+        name_norm,
+    )
+    return [dict(r) for r in rows]
+
+
 @router.get("/officer/{officer_name}")
 async def officer_network(
     officer_name: str,
     max_carriers: int = Query(80, ge=10, le=200),
     depth: int = Query(1, ge=0, le=2),
+    cluster: int | None = Query(None),
 ):
     """
     Build a network graph for an officer.
@@ -24,24 +44,57 @@ async def officer_network(
     pool = await get_conn()
     name_norm = officer_name.strip().lower()
 
+    # If cluster param provided, fetch the member dot_numbers to filter by
+    cluster_dots: list[int] | None = None
+    if cluster is not None:
+        row = await pool.fetchrow(
+            """
+            SELECT member_dot_numbers
+            FROM officer_network_clusters
+            WHERE officer_name_normalized = $1 AND cluster_index = $2
+            """,
+            name_norm, cluster,
+        )
+        if row and row["member_dot_numbers"]:
+            cluster_dots = list(row["member_dot_numbers"])
+
     # 1. Get the target officer's carriers (top by risk_score, crash count)
-    carrier_rows = await pool.fetch(
-        """
-        SELECT DISTINCT cp.dot_number,
-               c.legal_name, c.operating_status, c.physical_state,
-               COALESCE(c.risk_score, 0) AS risk_score,
-               COALESCE(c.power_units, 0) AS power_units,
-               COALESCE(c.total_crashes, 0) AS total_crashes,
-               COALESCE(c.fatal_crashes, 0) AS fatal_crashes,
-               cp.officer_position, cp.email
-        FROM carrier_principals cp
-        JOIN carriers c ON c.dot_number = cp.dot_number
-        WHERE cp.officer_name_normalized = $1
-        ORDER BY risk_score DESC NULLS LAST, total_crashes DESC NULLS LAST
-        LIMIT $2
-        """,
-        name_norm, max_carriers,
-    )
+    if cluster_dots is not None:
+        carrier_rows = await pool.fetch(
+            """
+            SELECT DISTINCT cp.dot_number,
+                   c.legal_name, c.operating_status, c.physical_state,
+                   COALESCE(c.risk_score, 0) AS risk_score,
+                   COALESCE(c.power_units, 0) AS power_units,
+                   COALESCE(c.total_crashes, 0) AS total_crashes,
+                   COALESCE(c.fatal_crashes, 0) AS fatal_crashes,
+                   cp.officer_position, cp.email
+            FROM carrier_principals cp
+            JOIN carriers c ON c.dot_number = cp.dot_number
+            WHERE cp.officer_name_normalized = $1
+              AND cp.dot_number = ANY($2::integer[])
+            ORDER BY risk_score DESC NULLS LAST, total_crashes DESC NULLS LAST
+            """,
+            name_norm, cluster_dots,
+        )
+    else:
+        carrier_rows = await pool.fetch(
+            """
+            SELECT DISTINCT cp.dot_number,
+                   c.legal_name, c.operating_status, c.physical_state,
+                   COALESCE(c.risk_score, 0) AS risk_score,
+                   COALESCE(c.power_units, 0) AS power_units,
+                   COALESCE(c.total_crashes, 0) AS total_crashes,
+                   COALESCE(c.fatal_crashes, 0) AS fatal_crashes,
+                   cp.officer_position, cp.email
+            FROM carrier_principals cp
+            JOIN carriers c ON c.dot_number = cp.dot_number
+            WHERE cp.officer_name_normalized = $1
+            ORDER BY risk_score DESC NULLS LAST, total_crashes DESC NULLS LAST
+            LIMIT $2
+            """,
+            name_norm, max_carriers,
+        )
 
     if not carrier_rows:
         return {"nodes": [], "edges": [], "stats": {}}

@@ -42,6 +42,17 @@ interface NetworkData {
   };
 }
 
+interface ClusterInfo {
+  cluster_index: number;
+  carrier_count: number;
+  link_signals: string[];
+  total_crashes: number;
+  fatal_crashes: number;
+  total_units: number;
+  avg_risk_score: number;
+  states: string[];
+}
+
 type LayoutMode = "force" | "hierarchical";
 
 function riskColor(score: number): string {
@@ -82,6 +93,8 @@ export default function NetworkGraphPage() {
   const [error, setError] = useState<string | null>(null);
   const [hovered, setHovered] = useState<GraphNode | null>(null);
   const [searchQuery, setSearchQuery] = useState(officerName || "");
+  const [clusters, setClusters] = useState<ClusterInfo[]>([]);
+  const [selectedCluster, setSelectedCluster] = useState<number | null>(null);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("force");
   const [depthVal, setDepthVal] = useState(parseInt(searchParams.get("depth") || "1"));
   const [maxVal, setMaxVal] = useState(parseInt(searchParams.get("max") || "80"));
@@ -99,11 +112,13 @@ export default function NetworkGraphPage() {
   const depth = depthVal;
   const maxCarriers = maxVal;
 
-  const fetchNetwork = useCallback((name: string) => {
+  const fetchNetwork = useCallback((name: string, cluster?: number | null) => {
     if (!name.trim()) return;
     setLoading(true);
     setError(null);
-    fetch(`${API_URL}/api/network/officer/${encodeURIComponent(name.trim())}?depth=${depth}&max_carriers=${maxCarriers}`)
+    let url = `${API_URL}/api/network/officer/${encodeURIComponent(name.trim())}?depth=${depth}&max_carriers=${maxCarriers}`;
+    if (cluster != null) url += `&cluster=${cluster}`;
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -119,11 +134,32 @@ export default function NetworkGraphPage() {
       });
   }, [depth, maxCarriers, layoutMode]);
 
+  // Fetch clusters when officer name changes
   useEffect(() => {
-    if (officerName) {
-      setSearchQuery(officerName);
-      fetchNetwork(officerName);
-    }
+    if (!officerName) return;
+    fetch(`${API_URL}/api/network/officer/${encodeURIComponent(officerName.trim())}/clusters`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((c: ClusterInfo[]) => {
+        setClusters(c);
+        // Auto-select largest confirmed cluster if multiple exist
+        const confirmed = c.filter(
+          (cl) => cl.carrier_count >= 2 && !(cl.link_signals.length === 1 && cl.link_signals[0] === "name_only")
+        );
+        if (confirmed.length >= 1 && c.length > 1) {
+          const best = confirmed[0]; // already sorted by carrier_count DESC
+          setSelectedCluster(best.cluster_index);
+          fetchNetwork(officerName, best.cluster_index);
+        } else {
+          setSelectedCluster(null);
+          fetchNetwork(officerName, null);
+        }
+      })
+      .catch(() => {
+        setClusters([]);
+        setSelectedCluster(null);
+        fetchNetwork(officerName, null);
+      });
+    setSearchQuery(officerName);
   }, [officerName, fetchNetwork]);
 
   // Re-layout when mode changes
@@ -558,7 +594,9 @@ export default function NetworkGraphPage() {
 
   const handleApplySettings = () => {
     if (officerName) {
-      navigate(`/network/${encodeURIComponent(officerName)}?depth=${depthVal}&max=${maxVal}`);
+      let url = `/network/${encodeURIComponent(officerName)}?depth=${depthVal}&max=${maxVal}`;
+      if (selectedCluster != null) url += `&cluster=${selectedCluster}`;
+      navigate(url);
     }
   };
 
@@ -624,6 +662,55 @@ export default function NetworkGraphPage() {
             <span style={{ color: "var(--danger, #ef4444)" }}><strong>{data.stats.total_fatal}</strong> fatalities</span>
           )}
           <span><strong>{data.stats.total_power_units.toLocaleString()}</strong> trucks</span>
+        </div>
+      )}
+
+      {/* Cluster picker */}
+      {clusters.length > 1 && !loading && (
+        <div style={{
+          padding: "6px 16px", background: "var(--bg-tertiary, #242834)",
+          borderBottom: "1px solid var(--border, #2e3344)", display: "flex",
+          gap: 6, fontSize: 12, flexWrap: "wrap", alignItems: "center", flexShrink: 0,
+        }}>
+          <span style={{ color: "var(--text-muted)", marginRight: 4, fontWeight: 600 }}>
+            {clusters.length} identities found:
+          </span>
+          {clusters
+            .filter((c) => c.carrier_count >= 2 && !(c.link_signals.length === 1 && c.link_signals[0] === "name_only"))
+            .map((c) => (
+              <button
+                key={c.cluster_index}
+                onClick={() => {
+                  setSelectedCluster(c.cluster_index);
+                  if (officerName) fetchNetwork(officerName, c.cluster_index);
+                }}
+                style={{
+                  padding: "3px 10px", borderRadius: 12, border: "1px solid",
+                  borderColor: selectedCluster === c.cluster_index ? "var(--accent, #3b82f6)" : "var(--border, #2e3344)",
+                  background: selectedCluster === c.cluster_index ? "rgba(59,130,246,0.15)" : "transparent",
+                  color: selectedCluster === c.cluster_index ? "var(--accent, #3b82f6)" : "var(--text-secondary)",
+                  cursor: "pointer", fontSize: 11, whiteSpace: "nowrap",
+                }}
+              >
+                {c.carrier_count} carriers &middot; {c.states.join(", ")}
+                {c.total_crashes > 0 && <span style={{ color: "var(--warning, #f59e0b)" }}> &middot; {c.total_crashes} crashes</span>}
+              </button>
+            ))}
+          <button
+            onClick={() => {
+              setSelectedCluster(null);
+              if (officerName) fetchNetwork(officerName, null);
+            }}
+            style={{
+              padding: "3px 10px", borderRadius: 12, border: "1px solid",
+              borderColor: selectedCluster === null ? "var(--accent, #3b82f6)" : "var(--border, #2e3344)",
+              background: selectedCluster === null ? "rgba(59,130,246,0.15)" : "transparent",
+              color: selectedCluster === null ? "var(--accent, #3b82f6)" : "var(--text-secondary)",
+              cursor: "pointer", fontSize: 11,
+            }}
+          >
+            All
+          </button>
         </div>
       )}
 

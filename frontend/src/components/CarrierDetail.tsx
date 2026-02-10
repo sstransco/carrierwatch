@@ -380,6 +380,7 @@ export default function CarrierDetailPage() {
   const [carrier, setCarrier] = useState<CarrierDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeHistoryTab, setActiveHistoryTab] = useState<HistoryTab>("inspections");
 
   useEffect(() => {
     if (!dotNumber) return;
@@ -436,7 +437,6 @@ export default function CarrierDetailPage() {
   }
 
   const risk = riskLevel(carrier.risk_score);
-  const [activeHistoryTab, setActiveHistoryTab] = useState<HistoryTab>("inspections");
 
   const scrollToCrashes = () => {
     setActiveHistoryTab("crashes");

@@ -50,6 +50,59 @@ async def get_inspections(
     ]
 
 
+@router.get("/carriers/{dot_number}/violations")
+async def get_violations(
+    dot_number: int,
+    limit: int = Query(100, ge=1, le=500),
+    category: str | None = None,
+):
+    """Get per-violation detail records for a carrier."""
+    pool = await get_conn()
+
+    if category:
+        rows = await pool.fetch(
+            """
+            SELECT iv.inspection_id, iv.violation_code, iv.violation_description,
+                   iv.oos_indicator, iv.violation_category, iv.unit_type,
+                   i.insp_date, i.report_state
+            FROM inspection_violations iv
+            JOIN inspections i ON i.inspection_id = iv.inspection_id
+            WHERE i.dot_number = $1 AND iv.violation_category = $2
+            ORDER BY i.insp_date DESC NULLS LAST
+            LIMIT $3
+            """,
+            dot_number, category.upper(), limit,
+        )
+    else:
+        rows = await pool.fetch(
+            """
+            SELECT iv.inspection_id, iv.violation_code, iv.violation_description,
+                   iv.oos_indicator, iv.violation_category, iv.unit_type,
+                   i.insp_date, i.report_state
+            FROM inspection_violations iv
+            JOIN inspections i ON i.inspection_id = iv.inspection_id
+            WHERE i.dot_number = $1
+            ORDER BY i.insp_date DESC NULLS LAST
+            LIMIT $2
+            """,
+            dot_number, limit,
+        )
+
+    return [
+        {
+            "inspection_id": r["inspection_id"],
+            "date": str(r["insp_date"]) if r["insp_date"] else None,
+            "state": r["report_state"],
+            "violation_code": r["violation_code"],
+            "description": r["violation_description"],
+            "oos": r["oos_indicator"],
+            "category": r["violation_category"],
+            "unit_type": r["unit_type"],
+        }
+        for r in rows
+    ]
+
+
 @router.get("/carriers/{dot_number}/crashes")
 async def get_crashes(
     dot_number: int,

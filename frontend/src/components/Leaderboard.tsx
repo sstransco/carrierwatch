@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useFetch } from "../hooks/useApi";
 import type { AddressCluster } from "../types";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const US_STATES = [
   "", "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
@@ -23,23 +22,13 @@ function countClass(count: number): string {
 }
 
 export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
-  const [clusters, setClusters] = useState<AddressCluster[]>([]);
   const [stateFilter, setStateFilter] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setLoading(true);
-    const params = new URLSearchParams({ limit: "100" });
-    if (stateFilter) params.set("state", stateFilter);
-
-    fetch(`${API_URL}/api/addresses/top-flagged?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setClusters(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [stateFilter]);
+  const params = new URLSearchParams({ limit: "100" });
+  if (stateFilter) params.set("state", stateFilter);
+  const { data: clusters, loading, error, retry } = useFetch<AddressCluster[]>(
+    `/api/addresses/top-flagged?${params}`
+  );
 
   const handleClick = (cluster: AddressCluster) => {
     if (cluster.latitude && cluster.longitude) {
@@ -64,7 +53,24 @@ export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
       </div>
 
       {loading ? (
-        <div className="loading">Loading flagged addresses...</div>
+        <div className="skeleton-rows">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className="skeleton-row">
+              <div className="skeleton" style={{ width: 20, height: 14 }} />
+              <div style={{ flex: 1 }}>
+                <div className="skeleton skeleton-text" style={{ width: "80%", marginBottom: 4 }} />
+                <div className="skeleton skeleton-text" style={{ width: "50%", height: 10 }} />
+              </div>
+              <div className="skeleton skeleton-badge" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="error-state">
+          <div className="error-title">Failed to load</div>
+          <p>{error}</p>
+          <button className="retry-btn" onClick={retry}>Retry</button>
+        </div>
       ) : (
         <table className="leaderboard-table">
           <thead>
@@ -76,7 +82,7 @@ export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
             </tr>
           </thead>
           <tbody>
-            {clusters.map((c, i) => (
+            {(clusters || []).map((c, i) => (
               <tr key={c.address_hash} onClick={() => handleClick(c)}>
                 <td>{i + 1}</td>
                 <td>

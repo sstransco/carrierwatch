@@ -3,11 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CarrierWatch — FMCSA Carrier Transparency</title>
+    <title>CarrierWatch Fraud Map — 4.3M FMCSA Carriers Mapped</title>
+    <meta name="description" content="Search and map 4.3M motor carriers. Cross-reference officers, flag chameleon carriers, and track safety violations across the US." />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://carrier.watch/" />
+    <meta property="og:title" content="CarrierWatch Fraud Map" />
+    <meta property="og:description" content="Search and map 4.3M motor carriers. Cross-reference officers, flag chameleon carriers, and track safety violations across the US." />
+    <meta property="og:image" content="https://carrier.watch/og-image.png" />
+    <meta property="og:site_name" content="CarrierWatch" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CarrierWatch Fraud Map" />
+    <meta name="twitter:description" content="Search and map 4.3M motor carriers. Cross-reference officers, flag chameleon carriers, and track safety violations across the US." />
+    <meta name="twitter:image" content="https://carrier.watch/og-image.png" />
+
+    <!-- SEO -->
+    <meta name="keywords" content="FMCSA, carrier safety, trucking, DOT, chameleon carrier, motor carrier, freight broker, crash data, inspection violations, PPP fraud, carrier watch" />
+    <meta name="author" content="CarrierWatch" />
+    <link rel="canonical" href="https://carrier.watch/" />
+
+    <!-- Preconnect to external domains -->
+    <link rel="preconnect" href="https://api.mapbox.com" crossorigin />
+    <link rel="preconnect" href="https://events.mapbox.com" crossorigin />
+    <link rel="dns-prefetch" href="https://api.mapbox.com" />
+
+    <!-- Mapbox GL CSS (non-render-blocking) -->
     <link
+      rel="preload"
       href="https://api.mapbox.com/mapbox-gl-js/v3.9.3/mapbox-gl.css"
-      rel="stylesheet"
+      as="style"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
+    <noscript><link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v3.9.3/mapbox-gl.css" /></noscript>
   </head>
   <body>
     <div id="root"></div>

@@ -1,7 +1,13 @@
+from __future__ import annotations
+
+import csv
+import io
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from database import get_conn
-from models import CarrierDetail, CarrierSummary, PaginatedResponse, PPPLoan, SearchResult
+from models import CarrierDetail, CarrierSummary, PaginatedResponse, PPPLoan, SearchResult, TopRiskCarrier
 
 router = APIRouter(prefix="/api/carriers", tags=["carriers"])
 
@@ -99,6 +105,194 @@ async def search_carriers(
     return results
 
 
+@router.get("/batch")
+async def batch_carriers(
+    dots: str = Query(..., description="Comma-separated DOT numbers"),
+):
+    """Batch lookup basic carrier info by DOT numbers (max 50)."""
+    pool = await get_conn()
+    dot_list = [int(d.strip()) for d in dots.split(",") if d.strip().isdigit()][:50]
+    if not dot_list:
+        return []
+
+    rows = await pool.fetch(
+        """
+        SELECT dot_number, legal_name, operating_status,
+               COALESCE(risk_score, 0) AS risk_score,
+               COALESCE(power_units, 0) AS power_units,
+               physical_state
+        FROM carriers
+        WHERE dot_number = ANY($1::integer[])
+        ORDER BY risk_score DESC
+        """,
+        dot_list,
+    )
+
+    return [
+        {
+            "dot_number": r["dot_number"],
+            "legal_name": r["legal_name"],
+            "operating_status": r["operating_status"],
+            "risk_score": r["risk_score"],
+            "power_units": r["power_units"],
+            "physical_state": r["physical_state"],
+        }
+        for r in rows
+    ]
+
+
+@router.get("/top-risk", response_model=list[TopRiskCarrier])
+async def top_risk_carriers(
+    limit: int = Query(50, ge=1, le=200),
+    min_score: int = Query(30, ge=0, le=100),
+    state: str | None = None,
+):
+    """Get carriers with the highest risk scores, optionally filtered by state."""
+    pool = await get_conn()
+
+    if state:
+        rows = await pool.fetch(
+            """
+            SELECT dot_number, legal_name, physical_state,
+                   COALESCE(risk_score, 0) AS risk_score,
+                   COALESCE(risk_flags, '{}') AS risk_flags,
+                   COALESCE(power_units, 0) AS power_units,
+                   COALESCE(total_crashes, 0) AS total_crashes,
+                   operating_status,
+                   ST_Y(location::geometry) AS latitude,
+                   ST_X(location::geometry) AS longitude
+            FROM carriers
+            WHERE risk_score >= $1 AND location IS NOT NULL
+              AND physical_state = $3
+            ORDER BY risk_score DESC, total_crashes DESC
+            LIMIT $2
+            """,
+            min_score, limit, state.upper(),
+        )
+    else:
+        rows = await pool.fetch(
+            """
+            SELECT dot_number, legal_name, physical_state,
+                   COALESCE(risk_score, 0) AS risk_score,
+                   COALESCE(risk_flags, '{}') AS risk_flags,
+                   COALESCE(power_units, 0) AS power_units,
+                   COALESCE(total_crashes, 0) AS total_crashes,
+                   operating_status,
+                   ST_Y(location::geometry) AS latitude,
+                   ST_X(location::geometry) AS longitude
+            FROM carriers
+            WHERE risk_score >= $1 AND location IS NOT NULL
+            ORDER BY risk_score DESC, total_crashes DESC
+            LIMIT $2
+            """,
+            min_score, limit,
+        )
+
+    return [
+        TopRiskCarrier(
+            dot_number=r["dot_number"],
+            legal_name=r["legal_name"],
+            physical_state=r["physical_state"],
+            risk_score=r["risk_score"],
+            risk_flags=r["risk_flags"],
+            power_units=r["power_units"],
+            total_crashes=r["total_crashes"],
+            operating_status=r["operating_status"],
+            latitude=r["latitude"],
+            longitude=r["longitude"],
+        )
+        for r in rows
+    ]
+
+
+@router.get("/export")
+async def export_carriers(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    state: str | None = None,
+    min_risk: int | None = None,
+    has_ppp: bool | None = None,
+    limit: int = Query(1000, ge=1, le=10000),
+):
+    """Export carrier data as CSV or JSON download."""
+    pool = await get_conn()
+
+    conditions = []
+    params = []
+    idx = 1
+
+    if state:
+        conditions.append(f"physical_state = ${idx}")
+        params.append(state.upper())
+        idx += 1
+    if min_risk is not None:
+        conditions.append(f"risk_score >= ${idx}")
+        params.append(min_risk)
+        idx += 1
+    if has_ppp:
+        conditions.append("ppp_loan_count > 0")
+
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+    rows = await pool.fetch(
+        f"""
+        SELECT dot_number, legal_name, dba_name, physical_address,
+               physical_city, physical_state, physical_zip, phone,
+               operating_status, power_units, drivers, safety_rating,
+               total_inspections, total_crashes, fatal_crashes,
+               vehicle_oos_rate, driver_oos_rate,
+               COALESCE(risk_score, 0) AS risk_score,
+               COALESCE(risk_flags, '{{}}') AS risk_flags,
+               ppp_loan_count, ppp_loan_total
+        FROM carriers
+        {where}
+        ORDER BY risk_score DESC
+        LIMIT ${idx}
+        """,
+        *params, limit,
+    )
+
+    if format == "json":
+        return [dict(r) for r in rows]
+
+    # CSV streaming response
+    output = io.StringIO()
+    writer = csv.writer(output)
+    if rows:
+        writer.writerow(rows[0].keys())
+        for r in rows:
+            writer.writerow([
+                ",".join(r["risk_flags"]) if k == "risk_flags" else v
+                for k, v in r.items()
+            ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=carrierwatch_export.csv"},
+    )
+
+
+@router.get("/{dot_number}/summary")
+async def get_carrier_summary(dot_number: int):
+    """Lightweight carrier summary for tooltips and previews."""
+    pool = await get_conn()
+    row = await pool.fetchrow(
+        """
+        SELECT dot_number, legal_name, dba_name, operating_status,
+               physical_city, physical_state, power_units, drivers,
+               total_crashes, total_inspections,
+               COALESCE(risk_score, 0) AS risk_score,
+               COALESCE(risk_flags, '{}') AS risk_flags
+        FROM carriers
+        WHERE dot_number = $1
+        """,
+        dot_number,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Carrier not found")
+    return dict(row)
+
+
 @router.get("/{dot_number}", response_model=CarrierDetail)
 async def get_carrier(dot_number: int):
     """Get full carrier detail by DOT number."""
@@ -155,6 +349,8 @@ async def get_carrier(dot_number: int):
         vehicle_oos_rate=float(row["vehicle_oos_rate"] or 0),
         driver_oos_rate=float(row["driver_oos_rate"] or 0),
         hazmat_oos_rate=float(row["hazmat_oos_rate"] or 0),
+        eld_violations=row["eld_violations"] or 0,
+        hos_violations=row["hos_violations"] or 0,
         address_hash=row["address_hash"],
         risk_score=row["risk_score"] or 0,
         risk_flags=row["risk_flags"] or [],

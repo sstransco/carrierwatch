@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import type { CarrierDetail as CarrierDetailType } from "../types";
+import type { CarrierDetail as CarrierDetailType, Principal, BatchCarrier } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
@@ -35,15 +35,19 @@ function formatFlag(flag: string): string {
     .replace("PO BOX ADDRESS", "PO Box used as physical address")
     .replace("NO PHYSICAL ADDRESS", "No physical address on file")
     .replace("INSURANCE LAPSE", "Insurance coverage lapsed")
-    .replace("AUTHORITY REVOKED REISSUED", "Authority revoked then reissued");
+    .replace("AUTHORITY REVOKED REISSUED", "Authority revoked then reissued")
+    .replace("OFFICER 25 PLUS", "Officer linked to 25+ carriers")
+    .replace("OFFICER 10 PLUS", "Officer linked to 10+ carriers")
+    .replace("OFFICER 5 PLUS", "Officer linked to 5+ carriers")
+    .replace("ELD VIOLATIONS 5 PLUS", "5+ ELD/HOS violations");
 }
 
-type HistoryTab = "inspections" | "crashes" | "authority" | "insurance";
+type HistoryTab = "inspections" | "violations" | "crashes" | "authority" | "insurance";
 
 function HistoryTabs({ dotNumber }: { dotNumber: number }) {
   const [tab, setTab] = useState<HistoryTab>("inspections");
   const [data, setData] = useState<Record<HistoryTab, unknown[] | null>>({
-    inspections: null, crashes: null, authority: null, insurance: null,
+    inspections: null, violations: null, crashes: null, authority: null, insurance: null,
   });
   const [loading, setLoading] = useState(false);
 
@@ -64,13 +68,13 @@ function HistoryTabs({ dotNumber }: { dotNumber: number }) {
   return (
     <div className="history-section">
       <div className="history-tabs">
-        {(["inspections", "crashes", "authority", "insurance"] as HistoryTab[]).map((t) => (
+        {(["inspections", "violations", "crashes", "authority", "insurance"] as HistoryTab[]).map((t) => (
           <button
             key={t}
             className={`history-tab ${tab === t ? "active" : ""}`}
             onClick={() => setTab(t)}
           >
-            {t === "inspections" ? "Inspections" : t === "crashes" ? "Crashes" : t === "authority" ? "Authority" : "Insurance"}
+            {t === "inspections" ? "Inspections" : t === "violations" ? "Violations" : t === "crashes" ? "Crashes" : t === "authority" ? "Authority" : "Insurance"}
           </button>
         ))}
       </div>
@@ -92,6 +96,26 @@ function HistoryTabs({ dotNumber }: { dotNumber: number }) {
                   <td style={r.oos_total > 0 ? { color: "var(--danger)" } : undefined}>{r.oos_total}</td>
                   <td>{r.driver_violations}</td>
                   <td>{r.vehicle_violations}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+        ) : tab === "violations" ? (
+          <div className="history-scroll"><table className="history-table">
+            <thead><tr><th>Date</th><th>State</th><th>Code</th><th>Description</th><th>Category</th><th>OOS</th></tr></thead>
+            <tbody>
+              {(items as { date: string; state: string; violation_code: string; description: string; category: string | null; oos: boolean; unit_type: string | null }[]).map((r, i) => (
+                <tr key={i} style={r.oos ? { background: "rgba(239,68,68,0.08)" } : undefined}>
+                  <td>{r.date || "\u2014"}</td>
+                  <td>{r.state || "\u2014"}</td>
+                  <td style={{ fontWeight: 500, whiteSpace: "nowrap" }}>{r.violation_code}</td>
+                  <td style={{ fontSize: 12, maxWidth: 300 }}>{r.description || "\u2014"}</td>
+                  <td><span style={{
+                    display: "inline-block", padding: "1px 6px", borderRadius: 4, fontSize: 11,
+                    background: r.category === "ELD_HOS" ? "rgba(239,68,68,0.15)" : r.category === "VEHICLE" ? "rgba(245,158,11,0.15)" : "rgba(100,116,139,0.15)",
+                    color: r.category === "ELD_HOS" ? "var(--danger)" : r.category === "VEHICLE" ? "var(--warning)" : "var(--text-secondary)",
+                  }}>{r.category || "OTHER"}</span></td>
+                  <td style={r.oos ? { color: "var(--danger)", fontWeight: 700 } : undefined}>{r.oos ? "YES" : "\u2014"}</td>
                 </tr>
               ))}
             </tbody>
@@ -148,6 +172,130 @@ function HistoryTabs({ dotNumber }: { dotNumber: number }) {
   );
 }
 
+function OtherCarriersExpander({ principal }: { principal: Principal }) {
+  const [expanded, setExpanded] = useState(false);
+  const [carriers, setCarriers] = useState<BatchCarrier[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleToggle = () => {
+    if (!expanded && carriers.length === 0 && principal.other_dot_numbers.length > 0) {
+      setLoading(true);
+      fetch(`${API_URL}/api/carriers/batch?dots=${principal.other_dot_numbers.join(",")}`)
+        .then((r) => r.json())
+        .then((data) => { setCarriers(data); setLoading(false); })
+        .catch(() => setLoading(false));
+    }
+    setExpanded(!expanded);
+  };
+
+  if (principal.other_carrier_count === 0) return <span>{"\u2014"}</span>;
+
+  return (
+    <div>
+      <button
+        onClick={handleToggle}
+        style={{
+          background: "none", border: "none", cursor: "pointer", padding: "2px 6px",
+          borderRadius: 4, fontSize: 12, fontWeight: 700,
+          color: principal.other_carrier_count >= 5 ? "var(--danger)" : "var(--warning)",
+          textDecoration: "underline",
+        }}
+      >
+        {principal.other_carrier_count} other {expanded ? "\u25B2" : "\u25BC"}
+      </button>
+      {expanded && (
+        <div style={{ marginTop: 6, maxHeight: 200, overflowY: "auto" }}>
+          {loading ? (
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Loading...</div>
+          ) : carriers.length === 0 ? (
+            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>No carrier data found</div>
+          ) : (
+            carriers.map((c) => (
+              <Link
+                key={c.dot_number}
+                to={`/carrier/${c.dot_number}`}
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "4px 8px", borderRadius: 4, fontSize: 11,
+                  background: "rgba(255,255,255,0.03)", marginBottom: 2,
+                  textDecoration: "none", color: "var(--text-primary)",
+                }}
+              >
+                <div>
+                  <span style={{ fontWeight: 500 }}>{c.legal_name}</span>
+                  <span style={{ color: "var(--text-muted)", marginLeft: 6 }}>DOT# {c.dot_number}</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {c.risk_score > 0 && (
+                    <span className={`risk-badge-sm ${c.risk_score >= 70 ? "risk-critical" : c.risk_score >= 50 ? "risk-high" : c.risk_score >= 30 ? "risk-medium" : "risk-low"}`}
+                      style={{ fontSize: 10, padding: "1px 5px" }}>
+                      {c.risk_score}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{c.physical_state}</span>
+                </div>
+              </Link>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PrincipalsSection({ dotNumber }: { dotNumber: number }) {
+  const [principals, setPrincipals] = useState<Principal[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/principals/carrier/${dotNumber}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setPrincipals(data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, [dotNumber]);
+
+  if (loading) return null;
+  if (principals.length === 0) return null;
+
+  return (
+    <div className="detail-card" style={{ gridColumn: "1 / -1" }}>
+      <h3>Company Officers / Principals</h3>
+      <div className="history-scroll">
+        <table className="history-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Position</th>
+              <th>Phone</th>
+              <th>Email</th>
+              <th>Other Carriers</th>
+            </tr>
+          </thead>
+          <tbody>
+            {principals.map((p, i) => (
+              <tr key={i} style={p.other_carrier_count >= 5 ? { background: "rgba(239,68,68,0.08)" } : undefined}>
+                <td style={{ fontWeight: 500 }}>{p.officer_name}</td>
+                <td>{p.position || "\u2014"}</td>
+                <td style={{ fontSize: 12 }}>{p.phone || "\u2014"}</td>
+                <td style={{ fontSize: 12 }}>{p.email || "\u2014"}</td>
+                <td><OtherCarriersExpander principal={p} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {principals.some(p => p.other_carrier_count >= 5) && (
+        <div className="colocated-warning" style={{ marginTop: 8 }}>
+          Officer linked to 5+ carriers — possible chameleon carrier network
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CarrierDetailPage() {
   const { dotNumber } = useParams<{ dotNumber: string }>();
   const [carrier, setCarrier] = useState<CarrierDetailType | null>(null);
@@ -172,12 +320,38 @@ export default function CarrierDetailPage() {
       });
   }, [dotNumber]);
 
-  if (loading) return <div className="detail-page"><div className="loading">Loading...</div></div>;
+  if (loading) return (
+    <div className="detail-page">
+      <Link to="/" className="detail-back">&larr; Back to map</Link>
+      <div className="skeleton skeleton-header" />
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <div className="skeleton skeleton-badge" />
+        <div className="skeleton skeleton-badge" style={{ width: 120 }} />
+      </div>
+      <div className="detail-grid">
+        {[1, 2, 3, 4].map((n) => (
+          <div key={n} className="skeleton-card">
+            <div className="skeleton skeleton-text" style={{ width: "40%", marginBottom: 16 }} />
+            {[1, 2, 3, 4, 5].map((r) => (
+              <div key={r} className="skeleton-row">
+                <div className="skeleton skeleton-text" style={{ width: "35%", marginBottom: 0 }} />
+                <div className="skeleton skeleton-text" style={{ width: "25%", marginBottom: 0, marginLeft: "auto" }} />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
   if (error || !carrier) {
     return (
       <div className="detail-page">
         <Link to="/" className="detail-back">&larr; Back to map</Link>
-        <p>{error || "Carrier not found"}</p>
+        <div className="error-state">
+          <div className="error-title">Failed to load carrier</div>
+          <p>{error || "Carrier not found"}</p>
+          <button className="retry-btn" onClick={() => window.location.reload()}>Retry</button>
+        </div>
       </div>
     );
   }
@@ -248,6 +422,12 @@ export default function CarrierDetailPage() {
           <div className="detail-row"><span className="label">Vehicle OOS Rate</span><span className="value">{carrier.vehicle_oos_rate.toFixed(1)}%</span></div>
           <div className="detail-row"><span className="label">Driver OOS Rate</span><span className="value">{carrier.driver_oos_rate.toFixed(1)}%</span></div>
           <div className="detail-row"><span className="label">HazMat OOS Rate</span><span className="value">{carrier.hazmat_oos_rate.toFixed(1)}%</span></div>
+          {carrier.eld_violations > 0 && (
+            <div className="detail-row"><span className="label">ELD Violations</span><span className="value" style={carrier.eld_violations >= 5 ? { color: "var(--danger)", fontWeight: 700 } : { color: "var(--warning)" }}>{carrier.eld_violations}</span></div>
+          )}
+          {carrier.hos_violations > 0 && (
+            <div className="detail-row"><span className="label">HOS OOS Violations</span><span className="value" style={{ color: "var(--danger)" }}>{carrier.hos_violations}</span></div>
+          )}
         </div>
 
         <div className="detail-card">
@@ -259,6 +439,9 @@ export default function CarrierDetailPage() {
           <div className="detail-row"><span className="label">Broker Authority</span><span className="value">{carrier.broker_authority || "\u2014"}</span></div>
         </div>
       </div>
+
+      {/* Company Officers */}
+      <PrincipalsSection dotNumber={carrier.dot_number} />
 
       {/* History Tabs */}
       <HistoryTabs dotNumber={carrier.dot_number} />

@@ -23,3 +23,15 @@ postgres:
       function: address_clusters_mvt
       minzoom: 0
       maxzoom: 14
+
+    cdl_schools_mvt:
+      schema: public
+      function: cdl_schools_mvt
+      minzoom: 0
+      maxzoom: 16
+
+    county_choropleth_mvt:
+      schema: public
+      function: county_choropleth_mvt
+      minzoom: 0
+      maxzoom: 10

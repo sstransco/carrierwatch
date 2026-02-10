@@ -64,6 +64,9 @@ export default function SearchBar({ onFlyTo }: SearchBarProps) {
         const carrier = await res.json();
         if (carrier.latitude && carrier.longitude) {
           onFlyTo(carrier.longitude, carrier.latitude, 14);
+        } else {
+          // No geocoded location — go to detail page
+          window.location.href = `/carrier/${result.dot_number}`;
         }
       }
     } catch {

@@ -55,6 +55,10 @@ export default function AboutPage() {
             <tr><td>Inactive at Cluster</td><td>+10</td><td>Inactive carrier at an address with 3+ other carriers</td></tr>
             <tr><td>Insurance Lapse</td><td>+20</td><td>Insurance coverage has lapsed or been cancelled</td></tr>
             <tr><td>Authority Revoked/Reissued</td><td>+15</td><td>Operating authority was revoked then reissued</td></tr>
+            <tr><td>Officer Linked to 25+ Carriers</td><td>+50</td><td>Company officer associated with 25+ different carrier registrations</td></tr>
+            <tr><td>Officer Linked to 10+ Carriers</td><td>+35</td><td>Company officer associated with 10&ndash;24 carrier registrations</td></tr>
+            <tr><td>Officer Linked to 5+ Carriers</td><td>+20</td><td>Company officer associated with 5&ndash;9 carrier registrations</td></tr>
+            <tr><td>ELD Violations (5+)</td><td>+25</td><td>5 or more ELD/Hours of Service violations on record</td></tr>
           </tbody>
         </table>
         <p className="about-note">
@@ -76,6 +80,9 @@ export default function AboutPage() {
             <tr><td>Crash Records</td><td>FMCSA / DOT DataHub</td><td>4.9M+</td><td>Monthly</td></tr>
             <tr><td>Insurance History</td><td>FMCSA / DOT DataHub</td><td>7.3M+</td><td>Monthly</td></tr>
             <tr><td>Authority History</td><td>FMCSA / DOT DataHub</td><td>1.8M+</td><td>Monthly</td></tr>
+            <tr><td>Company Officers/Principals</td><td>FMCSA Census CSV</td><td>4.5M+</td><td>Daily</td></tr>
+            <tr><td>Inspection Violations</td><td>FMCSA / DOT DataHub</td><td>13M+</td><td>Monthly</td></tr>
+            <tr><td>CDL Training Schools</td><td>FMCSA TPR</td><td>31,780</td><td>Quarterly</td></tr>
             <tr><td>PPP Loan Data</td><td>SBA FOIA</td><td>5.5M+</td><td>Static (Sept 2024)</td></tr>
             <tr><td>Geocoding</td><td>U.S. Census Bureau</td><td>&mdash;</td><td>On ingest</td></tr>
           </tbody>

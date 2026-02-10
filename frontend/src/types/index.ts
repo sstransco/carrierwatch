@@ -52,6 +52,8 @@ export interface CarrierDetail extends CarrierSummary {
   tow_crashes: number;
   driver_oos_rate: number;
   hazmat_oos_rate: number;
+  eld_violations: number;
+  hos_violations: number;
   address_hash: string | null;
   risk_flags: string[];
   ppp_loan_count: number;
@@ -89,6 +91,19 @@ export interface StatsResponse {
   total_ppp_matched: number;
 }
 
+export interface TopRiskCarrier {
+  dot_number: number;
+  legal_name: string;
+  physical_state: string | null;
+  risk_score: number;
+  risk_flags: string[];
+  power_units: number;
+  total_crashes: number;
+  operating_status: string | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface SearchResult {
   dot_number: number;
   legal_name: string;
@@ -106,6 +121,33 @@ export interface PaginatedResponse<T> {
   page: number;
   limit: number;
   pages: number;
+}
+
+export interface Principal {
+  officer_name: string;
+  officer_name_normalized: string;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  other_carrier_count: number;
+  other_dot_numbers: number[];
+}
+
+export interface BatchCarrier {
+  dot_number: number;
+  legal_name: string;
+  operating_status: string | null;
+  risk_score: number;
+  power_units: number;
+  physical_state: string | null;
+}
+
+export interface PrincipalLeaderboardEntry {
+  officer_name: string;
+  carrier_count: number;
+  statuses: string[];
+  total_risk: number;
+  dot_numbers: number[];
 }
 
 export interface MapLayer {

@@ -13,3 +13,4 @@ data/
 .DS_Store
 postgres_data/
 .claude/
+ssl/

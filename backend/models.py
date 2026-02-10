@@ -71,6 +71,8 @@ class CarrierDetail(BaseModel):
     vehicle_oos_rate: float = 0
     driver_oos_rate: float = 0
     hazmat_oos_rate: float = 0
+    eld_violations: int = 0
+    hos_violations: int = 0
     address_hash: str | None = None
     risk_score: int = 0
     risk_flags: list[str] = []
@@ -117,6 +119,19 @@ class PaginatedResponse(BaseModel):
     page: int
     limit: int
     pages: int
+
+
+class TopRiskCarrier(BaseModel):
+    dot_number: int
+    legal_name: str
+    physical_state: str | None = None
+    risk_score: int = 0
+    risk_flags: list[str] = []
+    power_units: int = 0
+    total_crashes: int = 0
+    operating_status: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class SearchResult(BaseModel):

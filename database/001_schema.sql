@@ -160,13 +160,25 @@ END;
 $$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
 
 -- Address clusters layer function
+-- Zoom-dependent filtering: only show large clusters at low zoom
 CREATE OR REPLACE FUNCTION address_clusters_mvt(z integer, x integer, y integer, query_params json DEFAULT '{}')
 RETURNS bytea AS $$
 DECLARE
     bounds geometry;
     result bytea;
+    min_count integer;
 BEGIN
     bounds := ST_TileEnvelope(z, x, y);
+
+    -- Progressive disclosure: fewer dots at low zoom, more detail as you zoom in
+    min_count := CASE
+        WHEN z <= 4 THEN 20
+        WHEN z <= 5 THEN 10
+        WHEN z <= 6 THEN 7
+        WHEN z <= 7 THEN 5
+        WHEN z <= 9 THEN 3
+        ELSE 2
+    END;
 
     SELECT INTO result ST_AsMVT(tile, 'address_clusters', 4096, 'geom')
     FROM (
@@ -187,6 +199,7 @@ BEGIN
             ) AS geom
         FROM address_clusters
         WHERE centroid IS NOT NULL
+          AND carrier_count >= min_count
           AND ST_Intersects(centroid::geometry, ST_Transform(bounds, 4326))
     ) AS tile
     WHERE tile.geom IS NOT NULL;

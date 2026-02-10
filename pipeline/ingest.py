@@ -36,6 +36,7 @@ log = logging.getLogger(__name__)
 STREET_ABBREVS = {
     r"\bSTREET\b": "ST",
     r"\bAVENUE\b": "AVE",
+    r"\bAV\b": "AVE",
     r"\bBOULEVARD\b": "BLVD",
     r"\bDRIVE\b": "DR",
     r"\bLANE\b": "LN",
@@ -45,15 +46,17 @@ STREET_ABBREVS = {
     r"\bCIRCLE\b": "CIR",
     r"\bPARKWAY\b": "PKWY",
     r"\bHIGHWAY\b": "HWY",
-    r"\bSUITE\b": "STE",
-    r"\bAPARTMENT\b": "APT",
-    r"\bBUILDING\b": "BLDG",
-    r"\bFLOOR\b": "FL",
     r"\bNORTH\b": "N",
     r"\bSOUTH\b": "S",
     r"\bEAST\b": "E",
     r"\bWEST\b": "W",
 }
+
+# Regex to strip suite/apt/unit/floor/bldg suffixes for address grouping
+_UNIT_RE = re.compile(
+    r"\b(STE|SUITE|SUIT|APT|APARTMENT|UNIT|BLDG|BUILDING|FL|FLOOR|RM|ROOM|SP|SPC|SPACE|LOT|DEPT|#)\s*\S*.*$",
+    re.IGNORECASE,
+)
 
 
 def normalize_address(address: str, city: str, state: str, zip_code: str) -> str:
@@ -61,6 +64,8 @@ def normalize_address(address: str, city: str, state: str, zip_code: str) -> str
         return ""
     addr = address.upper().strip()
     addr = re.sub(r"[.,#]", "", addr)
+    # Strip unit/suite/apt suffixes so all units at same building share a hash
+    addr = _UNIT_RE.sub("", addr)
     for pattern, replacement in STREET_ABBREVS.items():
         addr = re.sub(pattern, replacement, addr)
     addr = re.sub(r"\s+", " ", addr).strip()

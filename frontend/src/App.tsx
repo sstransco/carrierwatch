@@ -9,15 +9,22 @@ import type mapboxgl from "mapbox-gl";
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 const DEFAULT_LAYERS: MapLayer[] = [
+  { id: "county-fill-carriers", label: "Counties (Carriers)", visible: true },
+  { id: "county-fill-risk", label: "Counties (Risk)", visible: false },
+  { id: "risk", label: "Risk Overlay", visible: false },
   { id: "clusters", label: "Address Clusters", visible: true },
   { id: "carriers", label: "Individual Carriers", visible: false },
-  { id: "risk", label: "Risk Overlay", visible: false },
   { id: "heatmap", label: "Heatmap", visible: false },
+  { id: "cdl-schools", label: "CDL Schools", visible: true },
 ];
+
+const COUNTY_FILL_LAYERS = new Set(["county-fill-carriers", "county-fill-risk"]);
 
 export default function App() {
   const [layers, setLayers] = useState<MapLayer[]>(DEFAULT_LAYERS);
   const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
   useEffect(() => {
@@ -28,29 +35,41 @@ export default function App() {
   }, []);
 
   const handleLayerToggle = useCallback((layerId: string) => {
-    setLayers((prev) => {
-      const target = prev.find((l) => l.id === layerId);
-      if (!target) return prev;
-      // If turning on, turn off all others (radio-style)
-      if (!target.visible) {
-        return prev.map((l) => ({ ...l, visible: l.id === layerId }));
-      }
-      // If turning off, just turn it off
-      return prev.map((l) => (l.id === layerId ? { ...l, visible: false } : l));
-    });
+    setLayers((prev) =>
+      prev.map((l) => {
+        if (l.id === layerId) return { ...l, visible: !l.visible };
+        // County fills are mutually exclusive — turning one on turns the other off
+        if (COUNTY_FILL_LAYERS.has(layerId) && COUNTY_FILL_LAYERS.has(l.id)) {
+          const target = prev.find((p) => p.id === layerId);
+          if (target && !target.visible) return { ...l, visible: false };
+        }
+        return l;
+      })
+    );
   }, []);
 
   const handleFlyTo = useCallback((lng: number, lat: number, zoom?: number) => {
-    mapRef.current?.flyTo({ center: [lng, lat], zoom: zoom || 14, duration: 1500 });
+    const z = zoom || 14;
+    mapRef.current?.flyTo({ center: [lng, lat], zoom: z, duration: 1500 });
+    // Auto-enable carriers layer when zooming to a specific point
+    if (z >= 10) {
+      setLayers((prev) =>
+        prev.map((l) => l.id === "carriers" ? { ...l, visible: true } : l)
+      );
+    }
   }, []);
 
   return (
     <div className="app-layout">
       <div className="topbar">
+        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>&#9776;</button>
         <a href="/" className="topbar-brand">
           Carrier<span>Watch</span>
         </a>
+        <a href="/principals" className="topbar-link">Officers</a>
+        <a href="/cdl-schools" className="topbar-link">CDL Schools</a>
         <a href="/about" className="topbar-link">About</a>
+        <a href="https://x.com/sigma2transport" target="_blank" rel="noopener" className="topbar-link">Follow Us</a>
         <SearchBar onFlyTo={handleFlyTo} />
         {stats && (
           <div className="stats-bar">
@@ -77,10 +96,20 @@ export default function App() {
         )}
       </div>
       <div className="main-content">
-        <Sidebar onFlyTo={handleFlyTo} />
+        {sidebarOpen && <div className="sidebar-overlay visible" onClick={() => setSidebarOpen(false)} />}
+        {!sidebarCollapsed && (
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onFlyTo={handleFlyTo} />
+        )}
         <div className="map-container">
           <Map mapRef={mapRef} layers={layers} />
           <LayerToggle layers={layers} onToggle={handleLayerToggle} />
+          <button
+            className="sidebar-toggle-btn"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? "Show leaderboards" : "Hide leaderboards"}
+          >
+            {sidebarCollapsed ? "\u25B6" : "\u25C0"}
+          </button>
         </div>
       </div>
     </div>

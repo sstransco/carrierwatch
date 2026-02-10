@@ -1,8 +1,6 @@
-import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useFetch } from "../hooks/useApi";
 import type { AddressCluster, CarrierSummary } from "../types";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 function statusClass(status: string | null): string {
   if (!status) return "";
@@ -13,28 +11,46 @@ function statusClass(status: string | null): string {
 
 export default function AddressDetailPage() {
   const { addressHash } = useParams<{ addressHash: string }>();
-  const [cluster, setCluster] = useState<AddressCluster | null>(null);
-  const [carriers, setCarriers] = useState<CarrierSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data, loading, error, retry } = useFetch<{ cluster: AddressCluster; carriers: CarrierSummary[] }>(
+    addressHash ? `/api/addresses/${addressHash}` : null
+  );
 
-  useEffect(() => {
-    if (!addressHash) return;
-    fetch(`${API_URL}/api/addresses/${addressHash}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setCluster(data.cluster);
-        setCarriers(data.carriers);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [addressHash]);
+  const cluster = data?.cluster ?? null;
+  const carriers = data?.carriers ?? [];
 
-  if (loading) return <div className="detail-page"><div className="loading">Loading...</div></div>;
-  if (!cluster) {
+  if (loading) return (
+    <div className="detail-page">
+      <Link to="/" className="detail-back">&larr; Back to map</Link>
+      <div className="skeleton skeleton-header" />
+      <div className="skeleton skeleton-text" style={{ width: "40%" }} />
+      <div className="skeleton-card" style={{ marginTop: 16 }}>
+        {[1, 2, 3, 4].map((r) => (
+          <div key={r} className="skeleton-row">
+            <div className="skeleton skeleton-text" style={{ width: "35%", marginBottom: 0 }} />
+            <div className="skeleton skeleton-text" style={{ width: "20%", marginBottom: 0, marginLeft: "auto" }} />
+          </div>
+        ))}
+      </div>
+      <div className="skeleton-rows">
+        {[1, 2, 3, 4, 5].map((r) => (
+          <div key={r} className="skeleton-row">
+            <div className="skeleton skeleton-text" style={{ flex: 1, marginBottom: 0 }} />
+            <div className="skeleton skeleton-badge" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (error || !cluster) {
     return (
       <div className="detail-page">
-        <Link to="/" className="detail-back">← Back to map</Link>
-        <p>Address not found</p>
+        <Link to="/" className="detail-back">&larr; Back to map</Link>
+        <div className="error-state">
+          <div className="error-title">Failed to load address</div>
+          <p>{error || "Address not found"}</p>
+          <button className="retry-btn" onClick={retry}>Retry</button>
+        </div>
       </div>
     );
   }

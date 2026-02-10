@@ -15,7 +15,8 @@ async def address_mills():
         """
         SELECT address_hash, address, city, state, zip,
                carrier_count, active_count, total_crashes,
-               latitude, longitude
+               ST_Y(centroid::geometry) AS latitude,
+               ST_X(centroid::geometry) AS longitude
         FROM address_clusters
         ORDER BY carrier_count DESC
         LIMIT 25
@@ -63,7 +64,7 @@ async def ppp_suspicious():
                p.loan_amount, p.forgiveness_amount, p.jobs_reported, p.loan_status,
                COALESCE(c.risk_score, 0) AS risk_score
         FROM carriers c
-        JOIN ppp_loans p ON p.dot_number = c.dot_number
+        JOIN ppp_loans p ON p.matched_dot_number = c.dot_number
         WHERE c.power_units <= 5 AND p.loan_amount > 500000
         ORDER BY p.loan_amount DESC
         LIMIT 25
@@ -120,7 +121,7 @@ async def spotlight_summary():
             (SELECT SUM(total_crashes) FROM carriers WHERE risk_score >= 50) AS high_risk_crashes,
             (SELECT COUNT(*) FROM address_clusters WHERE carrier_count >= 25) AS large_clusters,
             (SELECT COUNT(DISTINCT officer_name_normalized) FROM officer_carrier_counts WHERE carrier_count >= 10) AS prolific_officers,
-            (SELECT SUM(loan_amount) FROM ppp_loans WHERE dot_number IS NOT NULL) AS total_ppp_to_carriers
+            (SELECT SUM(loan_amount) FROM ppp_loans WHERE matched_dot_number IS NOT NULL) AS total_ppp_to_carriers
         """
     )
     return dict(row)

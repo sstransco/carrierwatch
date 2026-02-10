@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import type { CarrierDetail as CarrierDetailType, Principal, BatchCarrier } from "../types";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
 function statusClass(status: string | null): string {
   if (!status) return "";
@@ -171,17 +172,24 @@ function HistoryTabs({ dotNumber, tab, onTabChange }: { dotNumber: number; tab: 
           <div className="history-empty">No {tab} records found</div>
         ) : tab === "inspections" ? (
           <div className="history-scroll"><table className="history-table">
-            <thead><tr><th>Date</th><th>State</th><th>Level</th><th>Violations</th><th>OOS</th><th>Driver Viol</th><th>Vehicle Viol</th></tr></thead>
+            <thead><tr><th>Date</th><th>State</th><th>Level</th><th>Result</th><th>Violations</th><th>OOS</th></tr></thead>
             <tbody>
               {(items as { date: string; report_state: string; level: number; violations: number; oos_total: number; driver_violations: number; vehicle_violations: number; post_crash: boolean }[]).map((r, i) => (
                 <tr key={i} style={r.post_crash ? { background: "rgba(239,68,68,0.08)" } : undefined}>
                   <td>{r.date || "\u2014"}</td>
                   <td>{r.report_state}</td>
-                  <td>{r.level}</td>
-                  <td style={r.violations > 0 ? { color: "var(--warning)" } : undefined}>{r.violations}</td>
-                  <td style={r.oos_total > 0 ? { color: "var(--danger)" } : undefined}>{r.oos_total}</td>
-                  <td>{r.driver_violations}</td>
-                  <td>{r.vehicle_violations}</td>
+                  <td>Level {r.level}</td>
+                  <td>
+                    {r.oos_total > 0 ? (
+                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 8, fontSize: 11, fontWeight: 700, background: "rgba(239,68,68,0.2)", color: "#ef4444" }}>OOS</span>
+                    ) : r.violations > 0 ? (
+                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 8, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.2)", color: "#f59e0b" }}>{r.violations} Violation{r.violations > 1 ? "s" : ""}</span>
+                    ) : (
+                      <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 8, fontSize: 11, fontWeight: 600, background: "rgba(34,197,94,0.2)", color: "#22c55e" }}>Clean</span>
+                    )}
+                  </td>
+                  <td style={r.violations > 0 ? { color: "var(--warning)" } : { color: "var(--text-muted)" }}>{r.violations}</td>
+                  <td style={r.oos_total > 0 ? { color: "var(--danger)", fontWeight: 700 } : { color: "var(--text-muted)" }}>{r.oos_total}</td>
                 </tr>
               ))}
             </tbody>
@@ -483,6 +491,31 @@ export default function CarrierDetailPage() {
         <div className="detail-card">
           <h3>Company Info</h3>
           <div className="detail-row"><span className="label">Physical Address</span><span className="value">{carrier.physical_address}<br />{carrier.physical_city}, {carrier.physical_state} {carrier.physical_zip}</span></div>
+          {carrier.latitude && carrier.longitude && MAPBOX_TOKEN && (
+            <div style={{ marginTop: 8, marginBottom: 8 }}>
+              <a
+                href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${carrier.latitude},${carrier.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ display: "block", borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}
+              >
+                <img
+                  src={`https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/${carrier.longitude},${carrier.latitude},17,0/400x180@2x?access_token=${MAPBOX_TOKEN}`}
+                  alt="Satellite view"
+                  style={{ width: "100%", height: 180, objectFit: "cover", display: "block" }}
+                  loading="lazy"
+                />
+              </a>
+              <a
+                href={`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${carrier.latitude},${carrier.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ fontSize: 11, color: "var(--accent)", marginTop: 4, display: "inline-block" }}
+              >
+                Open Google Street View &rarr;
+              </a>
+            </div>
+          )}
           {carrier.phone && <div className="detail-row"><span className="label">Phone</span><span className="value">{carrier.phone}</span></div>}
           <div className="detail-row"><span className="label">Operation</span><span className="value">{carrier.carrier_operation || "\u2014"}</span></div>
           <div className="detail-row"><span className="label">Authority Granted</span><span className="value">{carrier.authority_grant_date || "\u2014"}</span></div>
@@ -499,20 +532,30 @@ export default function CarrierDetailPage() {
         </div>
 
         <div className="detail-card">
-          <h3>Inspection & Crash Data</h3>
-          <div className="detail-row"><span className="label">Total Inspections</span><span className="value">{carrier.total_inspections}</span></div>
-          <div className="detail-row"><span className="label">Total Crashes</span><span className="value">{carrier.total_crashes > 0 ? <button onClick={scrollToCrashes} style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>{carrier.total_crashes}</button> : "0"}</span></div>
+          <h3>Inspections & Crashes</h3>
+          {/* Stat boxes */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 12 }}>
+            <div style={{ background: "var(--bg-tertiary)", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)" }}>{carrier.total_inspections.toLocaleString()}</div>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Inspections</div>
+            </div>
+            <div style={{ background: "var(--bg-tertiary)", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: carrier.eld_violations > 0 ? "var(--warning)" : "var(--text-primary)" }}>{carrier.eld_violations + carrier.hos_violations}</div>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>ELD/HOS Viol</div>
+            </div>
+            <div style={{ background: "var(--bg-tertiary)", borderRadius: 8, padding: "10px 8px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: carrier.vehicle_oos_rate > 30 || carrier.driver_oos_rate > 20 ? "var(--danger)" : "var(--text-primary)" }}>{carrier.vehicle_oos_rate.toFixed(0)}%</div>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Veh OOS Rate</div>
+            </div>
+            <div style={{ background: carrier.total_crashes > 0 ? "rgba(239,68,68,0.12)" : "var(--bg-tertiary)", borderRadius: 8, padding: "10px 8px", textAlign: "center", cursor: carrier.total_crashes > 0 ? "pointer" : "default" }} onClick={carrier.total_crashes > 0 ? scrollToCrashes : undefined}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: carrier.total_crashes > 0 ? "var(--danger)" : "var(--text-primary)" }}>{carrier.total_crashes}</div>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Crashes</div>
+            </div>
+          </div>
           <div className="detail-row"><span className="label">Fatal Crashes</span><span className="value">{carrier.fatal_crashes > 0 ? <button onClick={scrollToCrashes} style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", padding: 0, font: "inherit", fontWeight: 700, textDecoration: "underline" }}>{carrier.fatal_crashes}</button> : "0"}</span></div>
-          <div className="detail-row"><span className="label">Injury Crashes</span><span className="value">{carrier.injury_crashes > 0 ? <button onClick={scrollToCrashes} style={{ background: "none", border: "none", color: "var(--warning)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}>{carrier.injury_crashes}</button> : "0"}</span></div>
-          <div className="detail-row"><span className="label">Vehicle OOS Rate</span><span className="value">{carrier.vehicle_oos_rate.toFixed(1)}%</span></div>
-          <div className="detail-row"><span className="label">Driver OOS Rate</span><span className="value">{carrier.driver_oos_rate.toFixed(1)}%</span></div>
+          <div className="detail-row"><span className="label">Injury Crashes</span><span className="value" style={carrier.injury_crashes > 0 ? { color: "var(--warning)" } : undefined}>{carrier.injury_crashes}</span></div>
+          <div className="detail-row"><span className="label">Driver OOS Rate</span><span className="value" style={carrier.driver_oos_rate > 20 ? { color: "var(--danger)" } : undefined}>{carrier.driver_oos_rate.toFixed(1)}%</span></div>
           <div className="detail-row"><span className="label">HazMat OOS Rate</span><span className="value">{carrier.hazmat_oos_rate.toFixed(1)}%</span></div>
-          {carrier.eld_violations > 0 && (
-            <div className="detail-row"><span className="label">ELD Violations</span><span className="value" style={carrier.eld_violations >= 5 ? { color: "var(--danger)", fontWeight: 700 } : { color: "var(--warning)" }}>{carrier.eld_violations}</span></div>
-          )}
-          {carrier.hos_violations > 0 && (
-            <div className="detail-row"><span className="label">HOS OOS Violations</span><span className="value" style={{ color: "var(--danger)" }}>{carrier.hos_violations}</span></div>
-          )}
         </div>
 
         <div className="detail-card">

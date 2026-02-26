@@ -36,7 +36,12 @@ BATCH_SIZE = 10_000
 SPECIFIC_THRESHOLD = 0.35
 
 # Suffixes to strip from end of names before extracting surname
-NAME_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v", "md", "dds", "esq", "phd", "cpa"}
+NAME_SUFFIXES = {
+    "jr", "sr", "ii", "iii", "iv", "v", "md", "dds", "esq", "phd", "cpa",
+    "junior", "senior", "incorporated", "inc", "llc", "corp", "ltd", "dba",
+    "trustee", "executor", "agent", "president", "owner", "manager", "member",
+    "director", "secretary", "treasurer", "officer", "admin", "registered",
+}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -176,6 +181,16 @@ def run(conn):
         log.error("No training data found!")
         return
 
+    # Build known-name lookup: if a surname is in training data, use it directly
+    known_names = {}  # {surname_lower: (code, name, region)}
+    for cat in categories:
+        code = cat["code"]
+        cname = cat["name"]
+        region = cat.get("region", CATEGORY_TO_REGION.get(code, "Other"))
+        for sn in cat["surnames"]:
+            known_names[sn.lower()] = (code, cname, region)
+    log.info("Built known-name lookup with %d entries", len(known_names))
+
     # Train specific-category classifier
     specific_model = NaiveBayesClassifier(smoothing=0.5)
     specific_model.train(categories)
@@ -244,6 +259,28 @@ def run(conn):
     fallback_count = 0
 
     for i, surname in enumerate(surnames):
+        # Step 0: Check known-name lookup (training data = ground truth)
+        if surname in known_names:
+            code, name, region = known_names[surname]
+            confidence = 1.0
+            batch.append((surname, code, name, region, confidence))
+            stats[f"{code} ({name})"] += 1
+            if len(batch) >= BATCH_SIZE:
+                psycopg2.extras.execute_values(
+                    cur,
+                    """INSERT INTO surname_origins (surname, country_code, country_name, region, confidence)
+                       VALUES %s ON CONFLICT (surname) DO UPDATE SET
+                           country_code = EXCLUDED.country_code,
+                           country_name = EXCLUDED.country_name,
+                           region = EXCLUDED.region,
+                           confidence = EXCLUDED.confidence""",
+                    batch, template="(%s, %s, %s, %s, %s)"
+                )
+                conn.commit()
+                log.info("  Inserted %d / %d surnames...", i + 1, len(surnames))
+                batch = []
+            continue
+
         # Step 1: Try specific category classification
         specific_probs = specific_model.classify(surname)
         if specific_probs:
@@ -341,13 +378,22 @@ def run(conn):
         UPDATE carriers c
         SET dominant_origin = sub.dominant
         FROM (
-            SELECT cp.dot_number,
-                   (array_agg(so.country_code ORDER BY so.confidence DESC))[1] AS dominant
-            FROM carrier_principals cp
-            JOIN surname_origins so
-                ON so.surname = reverse(split_part(reverse(cp.officer_name_normalized), ' ', 1))
-            WHERE cp.officer_name_normalized LIKE '%% %%'
-            GROUP BY cp.dot_number
+            SELECT dot_number,
+                   (array_agg(country_code ORDER BY cnt DESC, country_code))[1] AS dominant
+            FROM (
+                SELECT cp.dot_number, so.country_code, COUNT(*) AS cnt
+                FROM carrier_principals cp
+                JOIN surname_origins so
+                    ON so.surname = LOWER(reverse(split_part(reverse(cp.officer_name_normalized), ' ', 1)))
+                WHERE cp.officer_name_normalized LIKE '%% %%'
+                  AND LOWER(reverse(split_part(reverse(cp.officer_name_normalized), ' ', 1)))
+                      NOT IN ('junior','senior','jr','sr','ii','iii','iv','v',
+                              'inc','llc','corp','ltd','dba','md','dds','esq','phd','cpa',
+                              'trustee','executor','agent','president','owner','manager',
+                              'member','director','secretary','treasurer','officer')
+                GROUP BY cp.dot_number, so.country_code
+            ) officer_origins
+            GROUP BY dot_number
         ) sub
         WHERE c.dot_number = sub.dot_number
     """)

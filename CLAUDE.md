@@ -21,13 +21,13 @@ Internet → Cloudflare → Nginx → ┬─ /api/*   → backend  (FastAPI :800
 
 ```
 backend/          FastAPI app — main.py, database.py, models.py, routers/
-  routers/        carriers, addresses, stats, history, principals, cdl_schools
+  routers/        carriers, addresses, stats, history, principals, cdl_schools, fraud_intel, international, network, spotlight
 frontend/src/     React 19 + TypeScript
   components/     13 components (Map, CarrierDetail, AddressDetail, CDLSchools, etc.)
   hooks/          useApi.ts
   types/          index.ts (CarrierSummary, CarrierDetail, AddressCluster, etc.)
 pipeline/         Python data ingestion scripts (psycopg2, httpx)
-database/         SQL migrations: 001_schema, 002_ppp_and_risk, 003_extended, 004_principals_eld_cdl
+database/         SQL migrations: 001_schema through 007_chameleons_rings_insurance
 nginx/            nginx.conf (dev), nginx-ssl.conf (prod with Cloudflare origin certs)
 ssl/              Cloudflare origin certificates
 data/             Raw data files (gitignored): census.csv, violations.csv, cdl_schools.xlsx
@@ -48,10 +48,14 @@ data/             Raw data files (gitignored): census.csv, violations.csv, cdl_s
 | ppp_loans | loan_id (serial) | 5.5M | SBA PPP loans, 564K matched to carriers |
 | carrier_principals | id (serial) | 4.47M | Company officers (3.39M unique normalized names) |
 | cdl_schools | id (serial) | 31,780 | CDL training providers from FMCSA TPR |
+| officer_network_clusters | id (serial) | varies | Disambiguated officer identities via union-find clustering |
+| chameleon_pairs | id (serial) | varies | Predecessor→successor carrier pairs (chameleon detection) |
+| fraud_rings | ring_id (serial) | varies | Connected components of carriers sharing 2+ officers |
 
 **Materialized Views:**
 - `address_clusters` — carriers grouped by address_hash (HAVING count >= 2), with centroid
 - `officer_carrier_counts` — officers grouped by normalized name with carrier_count and dot_numbers array
+- `insurance_company_stats` — insurance company aggregations (carriers, cancellations, risk)
 
 **MVT Functions (Martin):**
 - `carriers_mvt(z, x, y)` — carrier points with risk_score, status, safety
@@ -75,13 +79,15 @@ Format: `SHA-256(ADDR|CITY|STATE|ZIP)[:16]` with street abbreviation normalizati
 | history | `/api` | `GET /carriers/{dot}/inspections\|violations\|crashes\|authority\|insurance` |
 | principals | `/api/principals` | `GET /search`, `GET /top`, `GET /carrier/{dot_number}` |
 | cdl_schools | `/api/cdl-schools` | `GET /`, `GET /at-carrier-addresses`, `GET /stats` |
+| fraud_intel | `/api/fraud-intel` | `GET /stats`, `GET /chameleons`, `GET /rings`, `GET /insurance` |
+| international | `/api/international` | `GET /stats`, `GET /carriers`, `GET /linked` |
 
 Health check: `GET /health`
 
 ## Frontend
 
-**Routes:** `/` (map), `/carrier/:dotNumber`, `/address/:addressHash`, `/principals`, `/cdl-schools`, `/about`
-**Map layers:** risk, clusters, carriers, heatmap, cdl-schools (toggle via LayerToggle)
+**Routes:** `/` (map), `/carrier/:dotNumber`, `/address/:addressHash`, `/principals`, `/cdl-schools`, `/international`, `/fraud-intel`, `/about`
+**Map layers:** risk, clusters, carriers, heatmap, cdl-schools, foreign-carriers (toggle via LayerToggle)
 **Env vars:** `VITE_API_URL`, `VITE_TILES_URL`, `VITE_MAPBOX_TOKEN`
 
 ## Pipeline Scripts
@@ -98,8 +104,10 @@ Run order matters. Each script: `cd pipeline && DATABASE_URL=postgresql://... py
 | 6 | `violations_ingest.py` | Per-violation detail from dataset 876r-jsdb |
 | 7 | `cdl_schools_ingest.py` | FMCSA Training Provider Registry from Excel export |
 | 8 | `geocode_cdl.py` | Geocode CDL school addresses |
-| 9 | `apply_risk_flags.py` | Compute all risk flags (run AFTER geocoding to avoid deadlocks) |
+| 9 | `apply_risk_flags.py` | Authoritative risk scoring engine. --reset to recompute from scratch |
 | 10 | `rehash_addresses.py` | Utility to recalculate address hashes |
+| 11 | `detect_chameleons.py` | Chameleon carrier detection (predecessor→successor pairs) |
+| 12 | `detect_fraud_rings.py` | Fraud ring detection, insurance stats, peer benchmarks |
 
 Config: `pipeline/config.py` — DATABASE_URL, DATA_DIR, Socrata URLs, column mappings
 
@@ -110,16 +118,20 @@ Stored on `carriers` table: `risk_score` (integer), `risk_flags` (text[])
 | Flag | Points | Source |
 |------|--------|--------|
 | ADDRESS_OVERLAP_25+ | +50 | address_clusters with 25+ carriers |
-| ADDRESS_OVERLAP_10+ | +35 | address_clusters with 10+ carriers |
-| ADDRESS_OVERLAP_5+ | +20 | address_clusters with 5+ carriers |
 | OFFICER_25_PLUS | +50 | Officer linked to 25+ carriers |
+| FOREIGN_CARRIER | +45 | Physical address country != US |
+| ADDRESS_OVERLAP_10+ | +35 | address_clusters with 10+ carriers |
 | OFFICER_10_PLUS | +35 | Officer linked to 10+ carriers |
-| OFFICER_5_PLUS | +20 | Officer linked to 5+ carriers |
+| FOREIGN_LINKED_ADDRESS | +35 | US carrier shares address with foreign carrier |
+| FOREIGN_LINKED_OFFICER | +35 | US carrier shares officer with foreign carrier |
+| FOREIGN_MAILING | +30 | Domestic carrier with foreign mailing address |
 | FATAL_CRASHES | +25 | Any fatal crash on record |
-| ELD_VIOLATIONS_5_PLUS | +25 | 5+ ELD (Part 395) violations |
+| HIGH_ELD_VIOLATION_RATE | +25 | ELD violation rate >30% of inspections (min 3) or 15+ with <3 inspections |
+| ADDRESS_OVERLAP_5+ | +20 | address_clusters with 5+ carriers |
+| OFFICER_5_PLUS | +20 | Officer linked to 5+ carriers |
 | HIGH_VEHICLE_OOS | +20 | Vehicle OOS rate > 30% |
 | LARGE_PPP_LOAN | +20 | PPP loan > $100K |
-| INSURANCE_LAPSE | +20 | Insurance lapse detected |
+| INSURANCE_LAPSE | +20 | No active insurance policy (AUTHORIZED carriers only) |
 | NEW_AUTHORITY | +15 | Authority < 1 year old |
 | HIGH_CRASH_COUNT | +15 | 3+ crashes (non-fatal) |
 | HIGH_DRIVER_OOS | +15 | Driver OOS rate > 20% |
@@ -129,8 +141,13 @@ Stored on `carriers` table: `risk_score` (integer), `risk_flags` (text[])
 | PPP_LOAN | +10 | Any PPP loan received |
 | NO_PHYSICAL_ADDRESS | +10 | Missing/fake physical address |
 | INACTIVE_STATUS | +10 | Inactive but at clustered address |
+| CHAMELEON_SUCCESSOR | +30 | Suspected chameleon: reopened under new DOT |
+| CHAMELEON_PREDECESSOR | +20 | Predecessor to suspected chameleon carrier |
+| FRAUD_RING | +25 | Part of fraud ring (3+ carriers sharing 2+ officers) |
 
 High-risk threshold: score >= 50 (~240K carriers)
+
+Officer flags use `officer_network_clusters` for identity-aware matching when available (disambiguates common names like "JOSE RODRIGUEZ"). Falls back to raw name matching otherwise.
 
 ## Common Tasks
 
@@ -172,9 +189,9 @@ ssh -i ~/.ssh/carrierwatch root@64.23.142.235 "cd /opt/carrierwatch && \
 # ALWAYS restart nginx after rebuilding — it caches DNS at startup
 ```
 
-**SSH access:** `ssh -i ~/.ssh/carrierwatch root@64.23.142.235` (dedicated key)
+**SSH access:** `ssh -i ~/.ssh/carrierwatch root@138.197.22.63` (dedicated key)
 **Server path:** `/opt/carrierwatch`
-**Domain:** carrier.watch (Cloudflare DNS/CDN → DigitalOcean 64.23.142.235)
+**Domain:** carrier.watch (Cloudflare DNS/CDN → DigitalOcean 138.197.22.63)
 
 **Git (from Documents/CARRIERWATCH):**
 ```bash

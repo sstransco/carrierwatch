@@ -41,18 +41,74 @@ async def search_principals(
     ]
 
 
+@router.get("/origins")
+async def list_origins():
+    """Return available surname origins with officer/carrier counts."""
+    pool = await get_conn()
+    rows = await pool.fetch(
+        """
+        SELECT so.country_code, so.country_name, so.region,
+               COUNT(DISTINCT cp.officer_name_normalized) AS officer_count,
+               COUNT(DISTINCT cp.dot_number) AS carrier_count,
+               COALESCE(AVG(c.risk_score), 0)::int AS avg_risk
+        FROM surname_origins so
+        JOIN carrier_principals cp
+            ON so.surname = reverse(split_part(reverse(cp.officer_name_normalized), ' ', 1))
+        JOIN carriers c ON c.dot_number = cp.dot_number
+        GROUP BY so.country_code, so.country_name, so.region
+        ORDER BY officer_count DESC
+        """
+    )
+    return [
+        {
+            "code": r["country_code"].strip(),
+            "name": r["country_name"],
+            "region": r["region"],
+            "officer_count": r["officer_count"],
+            "carrier_count": r["carrier_count"],
+            "avg_risk": r["avg_risk"],
+        }
+        for r in rows
+    ]
+
+
 @router.get("/top")
 async def top_principals(
     min_carriers: int = Query(5, ge=2, le=100),
     limit: int = Query(50, ge=1, le=200),
     state: str | None = None,
+    origin: str | None = None,
 ):
     """Leaderboard: officers linked to the most carriers."""
     pool = await get_conn()
 
-    if state:
+    if state or origin:
+        # Build dynamic query with optional filters
+        conditions = []
+        params = []
+        idx = 1
+
+        if state:
+            conditions.append(f"c.physical_state = ${idx}")
+            params.append(state.upper())
+            idx += 1
+
+        if origin:
+            conditions.append(
+                f"""EXISTS (
+                    SELECT 1 FROM surname_origins so
+                    WHERE so.surname = reverse(split_part(reverse(cp.officer_name_normalized), ' ', 1))
+                      AND so.country_code = ${idx}
+                )"""
+            )
+            params.append(origin.upper().strip())
+            idx += 1
+
+        where_clause = " AND ".join(conditions)
+        params.extend([min_carriers, limit])
+
         rows = await pool.fetch(
-            """
+            f"""
             SELECT cp.officer_name_normalized,
                    COUNT(DISTINCT cp.dot_number) AS carrier_count,
                    array_agg(DISTINCT c.operating_status) AS statuses,
@@ -60,13 +116,13 @@ async def top_principals(
                    array_agg(DISTINCT cp.dot_number ORDER BY cp.dot_number) AS dot_numbers
             FROM carrier_principals cp
             JOIN carriers c ON c.dot_number = cp.dot_number
-            WHERE c.physical_state = $1
+            WHERE {where_clause}
             GROUP BY cp.officer_name_normalized
-            HAVING COUNT(DISTINCT cp.dot_number) >= $2
+            HAVING COUNT(DISTINCT cp.dot_number) >= ${idx}
             ORDER BY carrier_count DESC
-            LIMIT $3
+            LIMIT ${idx + 1}
             """,
-            state.upper(), min_carriers, limit,
+            *params,
         )
     else:
         # Use materialized view for fast unfiltered leaderboard

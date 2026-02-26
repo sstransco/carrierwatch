@@ -83,6 +83,11 @@ class CarrierDetail(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     colocated_carriers: list[CarrierSummary] = []
+    chameleon_pairs: list[ChameleonPair] = []
+    fraud_rings: list[FraudRing] = []
+    peer_crash_percentile: float | None = None
+    peer_oos_percentile: float | None = None
+    fleet_size_bucket: str | None = None
 
 
 class AddressCluster(BaseModel):
@@ -134,6 +139,38 @@ class TopRiskCarrier(BaseModel):
     longitude: float | None = None
 
 
+class CountryBreakdown(BaseModel):
+    country: str
+    carrier_count: int
+    active_count: int = 0
+    high_risk_count: int = 0
+    avg_risk: float = 0
+    total_crashes: int = 0
+
+
+class InternationalStats(BaseModel):
+    total_foreign: int = 0
+    linked_officer: int = 0
+    linked_address: int = 0
+    foreign_mailing: int = 0
+    high_risk_foreign: int = 0
+    countries: list[CountryBreakdown] = []
+
+
+class InternationalCarrier(BaseModel):
+    dot_number: int
+    legal_name: str
+    physical_country: str = "US"
+    physical_state: str | None = None
+    risk_score: int = 0
+    risk_flags: list[str] = []
+    power_units: int = 0
+    total_crashes: int = 0
+    operating_status: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+
+
 class SearchResult(BaseModel):
     dot_number: int
     legal_name: str
@@ -143,3 +180,53 @@ class SearchResult(BaseModel):
     operating_status: str | None = None
     risk_score: int = 0
     match_type: str  # "dot", "mc", "name"
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class ChameleonPair(BaseModel):
+    id: int
+    predecessor_dot: int
+    successor_dot: int
+    predecessor_name: str | None = None
+    successor_name: str | None = None
+    deactivation_date: date | None = None
+    activation_date: date | None = None
+    days_gap: int | None = None
+    match_signals: list[str] = []
+    signal_count: int = 0
+    confidence: str = "low"
+
+
+class FraudRing(BaseModel):
+    ring_id: int
+    carrier_dots: list[int] = []
+    officer_names: list[str] = []
+    shared_addresses: list[str] = []
+    carrier_count: int = 0
+    active_count: int = 0
+    total_crashes: int = 0
+    total_fatalities: int = 0
+    combined_risk: int = 0
+    confidence: str = "low"
+
+
+class InsuranceCompanyStats(BaseModel):
+    insurance_company: str
+    carriers_insured: int = 0
+    total_policies: int = 0
+    cancellations: int = 0
+    cancellation_rate: float = 0
+    high_risk_carriers: int = 0
+    avg_carrier_risk: int = 0
+    total_crashes: int = 0
+
+
+class FraudIntelStats(BaseModel):
+    total_chameleon_pairs: int = 0
+    high_confidence_pairs: int = 0
+    medium_confidence_pairs: int = 0
+    total_fraud_rings: int = 0
+    high_confidence_rings: int = 0
+    carriers_in_rings: int = 0
+    insurance_companies: int = 0

@@ -9,40 +9,42 @@ router = APIRouter(prefix="/api/addresses", tags=["addresses"])
 @router.get("/top-flagged", response_model=list[AddressCluster])
 async def top_flagged_addresses(
     state: str | None = None,
+    active_only: bool = False,
+    sort: str = Query("total", regex="^(total|active)$"),
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get top addresses by carrier count (potential chameleon clusters)."""
     pool = await get_conn()
 
+    order_col = "active_count" if sort == "active" else "carrier_count"
+    where_clauses = []
+    params: list = []
+    idx = 1
+
     if state:
-        rows = await pool.fetch(
-            """
-            SELECT address_hash, address, city, state, zip,
-                   carrier_count, active_count, total_crashes,
-                   avg_vehicle_oos_rate,
-                   ST_Y(centroid::geometry) AS latitude,
-                   ST_X(centroid::geometry) AS longitude
-            FROM address_clusters
-            WHERE state = $1
-            ORDER BY carrier_count DESC
-            LIMIT $2
-            """,
-            state.upper(), limit,
-        )
-    else:
-        rows = await pool.fetch(
-            """
-            SELECT address_hash, address, city, state, zip,
-                   carrier_count, active_count, total_crashes,
-                   avg_vehicle_oos_rate,
-                   ST_Y(centroid::geometry) AS latitude,
-                   ST_X(centroid::geometry) AS longitude
-            FROM address_clusters
-            ORDER BY carrier_count DESC
-            LIMIT $1
-            """,
-            limit,
-        )
+        where_clauses.append(f"state = ${idx}")
+        params.append(state.upper())
+        idx += 1
+
+    if active_only:
+        where_clauses.append("active_count > 0")
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    rows = await pool.fetch(
+        f"""
+        SELECT address_hash, address, city, state, zip,
+               carrier_count, active_count, total_crashes,
+               avg_vehicle_oos_rate,
+               ST_Y(centroid::geometry) AS latitude,
+               ST_X(centroid::geometry) AS longitude
+        FROM address_clusters
+        {where_sql}
+        ORDER BY {order_col} DESC
+        LIMIT ${idx}
+        """,
+        *params, limit,
+    )
 
     return [
         AddressCluster(

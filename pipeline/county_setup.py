@@ -104,11 +104,23 @@ def load_shapefile(zip_path: str) -> None:
         )
 
         shp2pgsql.stdout.close()
-        stdout, stderr = psql.communicate()
+        psql_stdout, psql_stderr = psql.communicate()
+
+        # Wait for shp2pgsql to finish and check its exit code
+        shp2pgsql.wait()
+        shp2pgsql_stderr = shp2pgsql.stderr.read()
+
+        if shp2pgsql.returncode != 0:
+            print(f"  shp2pgsql FAILED (exit code {shp2pgsql.returncode})")
+            if shp2pgsql_stderr:
+                print(f"  shp2pgsql stderr: {shp2pgsql_stderr.decode()}")
+            raise RuntimeError(f"shp2pgsql failed with code {shp2pgsql.returncode}")
 
         if psql.returncode != 0:
-            print(f"  psql stderr: {stderr.decode()}")
-            raise RuntimeError(f"shp2pgsql/psql failed with code {psql.returncode}")
+            print(f"  psql FAILED (exit code {psql.returncode})")
+            if psql_stderr:
+                print(f"  psql stderr: {psql_stderr.decode()}")
+            raise RuntimeError(f"psql failed with code {psql.returncode}")
 
         print(f"  Shapefile loaded into us_counties_raw")
 
@@ -189,7 +201,8 @@ def backfill_county_geoid(conn) -> int:
             UPDATE carriers c
             SET county_geoid = co.geoid
             FROM batch b
-            JOIN us_counties co ON ST_Within(b.location::geometry, co.geom)
+            -- ST_Covers includes points on polygon boundaries; ST_Within does not
+            JOIN us_counties co ON ST_Covers(co.geom, b.location::geometry)
             WHERE c.dot_number = b.dot_number
         """)
         rows = cur.rowcount
@@ -239,8 +252,10 @@ def main():
             capture_output=True, text=True,
         )
         if result.returncode != 0:
-            print(f"  Migration stderr: {result.stderr}")
-            # Don't fail — tables might already exist
+            print(f"  Migration FAILED (exit code {result.returncode})")
+            if result.stderr:
+                print(f"  stderr: {result.stderr}")
+            sys.exit(1)
         print("  Migration applied")
     else:
         print(f"  Warning: {migration_path} not found, skipping migration")

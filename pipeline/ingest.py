@@ -285,7 +285,7 @@ def bulk_insert(records, conn):
 
     batch = []
     total = 0
-    batch_size = 5000
+    batch_size = 50000
 
     with conn.cursor() as cur:
         for record in records:

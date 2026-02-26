@@ -68,7 +68,7 @@ def parse_violations(csv_path, conn):
 
     batch = []
     total = 0
-    batch_size = 10000
+    batch_size = 50000
 
     with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -171,17 +171,22 @@ def update_eld_hos_counts(conn):
         conn.commit()
         log.info("  HOS OOS violations updated for %d carriers", hos_updated)
 
-        # Risk flag: 5+ ELD violations
+        # Risk flag: High ELD violation rate (rate-based)
         cur.execute("""
             UPDATE carriers c SET
                 risk_score = COALESCE(risk_score, 0) + 25,
-                risk_flags = array_append(COALESCE(risk_flags, '{}'), 'ELD_VIOLATIONS_5_PLUS')
-            WHERE c.eld_violations >= 5
+                risk_flags = array_append(COALESCE(risk_flags, '{}'), 'HIGH_ELD_VIOLATION_RATE')
+            WHERE (
+                (total_inspections >= 3 AND eld_violations::float / total_inspections > 0.3)
+                OR
+                (eld_violations >= 15 AND total_inspections < 3)
+            )
+              AND NOT ('HIGH_ELD_VIOLATION_RATE' = ANY(COALESCE(c.risk_flags, '{}')))
               AND NOT ('ELD_VIOLATIONS_5_PLUS' = ANY(COALESCE(c.risk_flags, '{}')))
         """)
         eld_flagged = cur.rowcount
         conn.commit()
-        log.info("  Carriers flagged for 5+ ELD violations: %d", eld_flagged)
+        log.info("  Carriers flagged for high ELD violation rate: %d", eld_flagged)
 
 
 def main():
@@ -191,6 +196,11 @@ def main():
 
     conn = psycopg2.connect(DATABASE_URL)
     try:
+        # Disable FK constraint checks for bulk load
+        with conn.cursor() as cur:
+            cur.execute("SET session_replication_role = 'replica'")
+        conn.commit()
+
         # Clear existing
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM inspection_violations")

@@ -13,9 +13,11 @@ const TILES_URL = (() => {
 interface MapProps {
   mapRef: MutableRefObject<mapboxgl.Map | null>;
   layers: MapLayer[];
+  activeOnly?: boolean;
+  originFilter?: string;
 }
 
-export default function Map({ mapRef, layers }: MapProps) {
+export default function Map({ mapRef, layers, activeOnly, originFilter }: MapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
 
@@ -53,7 +55,7 @@ export default function Map({ mapRef, layers }: MapProps) {
       map.addSource("carriers-source", {
         type: "vector",
         tiles: [`${TILES_URL}/carriers_mvt/{z}/{x}/{y}`],
-        minzoom: 7,
+        minzoom: 4,
         maxzoom: 16,
       });
 
@@ -96,28 +98,28 @@ export default function Map({ mapRef, layers }: MapProps) {
         type: "circle",
         source: "carriers-source",
         "source-layer": "carriers",
-        minzoom: 7,
+        minzoom: 5,
         filter: [">", ["get", "risk_score"], 0],
         layout: { visibility: "visible" },
         paint: {
-          "circle-radius": ["interpolate", ["linear"], ["get", "risk_score"], 10, 3, 30, 5, 50, 7, 70, 9],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 2, 7, 3, 10, 5, 13, 7],
           "circle-color": ["interpolate", ["linear"], ["get", "risk_score"], 10, "#3b82f6", 30, "#f59e0b", 50, "#f97316", 70, "#ef4444"],
-          "circle-opacity": 0.7,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.4, 8, 0.7],
           "circle-stroke-width": 0.5,
           "circle-stroke-color": "rgba(255,255,255,0.2)",
         },
       });
 
-      // Individual carriers (hidden by default)
+      // Individual carriers (visible by default)
       map.addLayer({
         id: "carriers",
         type: "circle",
         source: "carriers-source",
         "source-layer": "carriers",
-        minzoom: 7,
-        layout: { visibility: "none" },
+        minzoom: 5,
+        layout: { visibility: "visible" },
         paint: {
-          "circle-radius": 3,
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 5, 1.5, 7, 2, 10, 3, 13, 4],
           "circle-color": [
             "match", ["get", "operating_status"],
             "AUTHORIZED", "#22c55e",
@@ -125,7 +127,7 @@ export default function Map({ mapRef, layers }: MapProps) {
             "OUT-OF-SERVICE", "#ef4444",
             "#3b82f6",
           ],
-          "circle-opacity": 0.7,
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 5, 0.3, 8, 0.7],
           "circle-stroke-width": 0.5,
           "circle-stroke-color": "rgba(255,255,255,0.2)",
         },
@@ -181,6 +183,81 @@ export default function Map({ mapRef, layers }: MapProps) {
         },
       });
 
+      // Foreign carriers (filtered from same source — rose/red dots)
+      map.addLayer({
+        id: "foreign-carriers",
+        type: "circle",
+        source: "carriers-source",
+        "source-layer": "carriers",
+        minzoom: 4,
+        filter: ["all", ["has", "physical_country"], ["!=", ["get", "physical_country"], "US"]],
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2, 7, 3.5, 10, 5, 13, 7],
+          "circle-color": "#e11d48",
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.5, 8, 0.85],
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "rgba(255,255,255,0.3)",
+        },
+      });
+
+      // Demographics overlay — carriers colored by dominant officer surname origin
+      map.addLayer({
+        id: "demographics",
+        type: "circle",
+        source: "carriers-source",
+        "source-layer": "carriers",
+        minzoom: 4,
+        filter: ["has", "dominant_origin"],
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 2, 7, 3, 10, 5, 13, 7],
+          "circle-color": [
+            "match", ["get", "dominant_origin"],
+            "JP", "#ff6b6b",   // Japanese — red
+            "KR", "#ee5a24",   // Korean — dark orange
+            "CN", "#f9ca24",   // Chinese — gold
+            "VN", "#6ab04c",   // Vietnamese — green
+            "IN", "#e056fd",   // Indian — magenta
+            "PH", "#22a6b3",   // Filipino — teal
+            "GR", "#7ed6df",   // Greek — light cyan
+            "PL", "#dfe6e9",   // Polish — light gray
+            "AM", "#fd79a8",   // Armenian — pink
+            "GE", "#a29bfe",   // Georgian — lavender
+            "FI", "#74b9ff",   // Finnish — light blue
+            "IT", "#00b894",   // Italian — emerald
+            "RU", "#0984e3",   // Russian — blue
+            "PT", "#fdcb6e",   // Portuguese — amber
+            "NL", "#ff7675",   // Dutch — coral
+            "TR", "#d63031",   // Turkish — crimson
+            "DE", "#b2bec3",   // German — silver
+            "IE", "#55efc4",   // Irish — mint
+            "HU", "#ffeaa7",   // Hungarian — cream
+            "UA", "#81ecec",   // Ukrainian — aqua
+            "NG", "#e17055",   // Nigerian — burnt orange
+            "ET", "#fab1a0",   // Ethiopian — salmon
+            "AR", "#636e72",   // Arabic — dark gray
+            "ES", "#ff9f43",   // Latino — orange
+            "GB", "#dfe6e9",   // Anglo — light
+            // Fallback groups
+            "EA", "#f6e58d",   // East Asian
+            "XS", "#badc58",   // Southeast Asian
+            "XA", "#c7ecee",   // South Asian
+            "LA", "#ffbe76",   // Latino fallback
+            "XB", "#95afc0",   // Anglo fallback
+            "XL", "#a4b0be",   // Slavic
+            "XN", "#778ca3",   // Scandinavian
+            "EU", "#d1d8e0",   // European
+            "ME", "#8e8e8e",   // Middle Eastern
+            "XF", "#cf6a87",   // African
+            "#555",            // default
+          ],
+          "circle-opacity": ["interpolate", ["linear"], ["zoom"], 4, 0.5, 8, 0.85],
+          "circle-stroke-width": 0.5,
+          "circle-stroke-color": "rgba(255,255,255,0.15)",
+        },
+      });
+
       // ==== CLICK HANDLERS ====
 
       // CDL Schools popup
@@ -218,7 +295,7 @@ export default function Map({ mapRef, layers }: MapProps) {
             <div class="popup-meta">${p.city || ""}, ${p.state || ""} ${p.zip || ""}</div>
             <div class="popup-meta">Carriers: <span class="leaderboard-count ${countClass}">${p.carrier_count}</span></div>
             <div class="popup-meta">Crashes: ${p.total_crashes || 0}</div>
-            <a class="popup-link" href="/address/${p.address_hash}">View all carriers &rarr;</a>
+            <a class="popup-link" href="/address/${encodeURIComponent(p.address_hash)}">View all carriers &rarr;</a>
           `)
           .addTo(map);
       });
@@ -247,7 +324,7 @@ export default function Map({ mapRef, layers }: MapProps) {
             ${p.total_crashes ? `<div class="popup-meta">Crashes: ${p.total_crashes}</div>` : ""}
             ${p.safety_rating ? `<div class="popup-meta">Safety: ${p.safety_rating}</div>` : ""}
             <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:8px;padding-top:6px;">
-              <a class="popup-link" style="margin-top:0;" href="/carrier/${p.dot_number}">View details &rarr;</a>
+              <a class="popup-link" style="margin-top:0;" href="/carrier/${encodeURIComponent(p.dot_number)}">View details &rarr;</a>
             </div>
           `)
           .addTo(map);
@@ -256,8 +333,63 @@ export default function Map({ mapRef, layers }: MapProps) {
       map.on("click", "carriers", onCarrierOrRiskClick);
       map.on("click", "risk", onCarrierOrRiskClick);
 
+      // Foreign carrier click
+      map.on("click", "foreign-carriers", (e) => {
+        if (!e.features?.length) return;
+        const p = e.features[0].properties!;
+        const coords = (e.features[0].geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+        const riskScore = Number(p.risk_score) || 0;
+        const riskClass = riskScore >= 70 ? "risk-critical" : riskScore >= 50 ? "risk-high" : riskScore >= 30 ? "risk-medium" : riskScore >= 10 ? "risk-low" : "";
+        const country = p.physical_country || "??";
+
+        new mapboxgl.Popup({ offset: 8 })
+          .setLngLat(coords)
+          .setHTML(`
+            <div class="popup-meta" style="font-size:10px;color:#e11d48;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Foreign Carrier (${country})</div>
+            <div class="popup-title">${p.legal_name}</div>
+            <div class="popup-meta">DOT# ${p.dot_number}</div>
+            <div class="popup-meta">Fleet: <strong>${p.power_units || 0}</strong> units</div>
+            ${riskScore > 0 ? `<div class="popup-meta">Risk: <span class="risk-badge-sm ${riskClass}" style="font-size:13px;padding:2px 10px;">${riskScore}</span></div>` : ""}
+            ${p.total_crashes ? `<div class="popup-meta">Crashes: ${p.total_crashes}</div>` : ""}
+            <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:8px;padding-top:6px;">
+              <a class="popup-link" style="margin-top:0;" href="/carrier/${encodeURIComponent(p.dot_number)}">View details &rarr;</a>
+            </div>
+          `)
+          .addTo(map);
+      });
+
+      // Demographics layer click
+      map.on("click", "demographics", (e) => {
+        if (!e.features?.length) return;
+        const p = e.features[0].properties!;
+        const coords = (e.features[0].geometry as GeoJSON.Point).coordinates.slice() as [number, number];
+        const riskScore = Number(p.risk_score) || 0;
+        const riskClass = riskScore >= 70 ? "risk-critical" : riskScore >= 50 ? "risk-high" : riskScore >= 30 ? "risk-medium" : riskScore >= 10 ? "risk-low" : "";
+        const origin = p.dominant_origin || "??";
+        const status = String(p.operating_status || "Unknown");
+        const statusColor = status === "AUTHORIZED" ? "#22c55e" : status === "OUT-OF-SERVICE" ? "#ef4444" : "#6b7084";
+
+        new mapboxgl.Popup({ offset: 8 })
+          .setLngLat(coords)
+          .setHTML(`
+            <div class="popup-meta" style="font-size:10px;color:#e056fd;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Origin: ${origin}</div>
+            <div class="popup-title">${p.legal_name}</div>
+            <div class="popup-meta">DOT# ${p.dot_number}</div>
+            <div class="popup-meta" style="display:flex;align-items:center;gap:5px;">
+              <span style="color:${statusColor};font-size:10px;">&#9679;</span>
+              <span>${status}</span>
+            </div>
+            <div class="popup-meta">Fleet: <strong>${p.power_units || 0}</strong> units</div>
+            ${riskScore > 0 ? `<div class="popup-meta">Risk: <span class="risk-badge-sm ${riskClass}" style="font-size:13px;padding:2px 10px;">${riskScore}</span></div>` : ""}
+            <div style="border-top:1px solid rgba(255,255,255,0.08);margin-top:8px;padding-top:6px;">
+              <a class="popup-link" style="margin-top:0;" href="/carrier/${encodeURIComponent(p.dot_number)}">View details &rarr;</a>
+            </div>
+          `)
+          .addTo(map);
+      });
+
       // Cursor changes
-      for (const layerId of ["clusters", "carriers", "risk", "cdl-schools"]) {
+      for (const layerId of ["clusters", "carriers", "risk", "cdl-schools", "foreign-carriers", "demographics"]) {
         map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
       }
@@ -317,6 +449,70 @@ export default function Map({ mapRef, layers }: MapProps) {
       return () => { map.off("idle", syncVisibility); };
     }
   }, [layers, mapRef]);
+
+  // Sync activeOnly filter to map layers
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const applyFilter = () => {
+      if (activeOnly) {
+        // Filter individual carriers to AUTHORIZED only
+        if (map.getLayer("carriers")) {
+          map.setFilter("carriers", ["in", ["get", "operating_status"], ["literal", ["AUTHORIZED", "AUTHORIZED FOR HIRE"]]]);
+        }
+        // Filter risk overlay to AUTHORIZED only (keep risk_score > 0)
+        if (map.getLayer("risk")) {
+          map.setFilter("risk", ["all",
+            [">", ["get", "risk_score"], 0],
+            ["in", ["get", "operating_status"], ["literal", ["AUTHORIZED", "AUTHORIZED FOR HIRE"]]],
+          ]);
+        }
+        // Filter clusters to those with active carriers
+        if (map.getLayer("clusters")) {
+          map.setFilter("clusters", [">", ["get", "active_count"], 0]);
+        }
+        if (map.getLayer("clusters-labels")) {
+          map.setFilter("clusters-labels", [">", ["get", "active_count"], 0]);
+        }
+      } else {
+        // Clear all filters (restore defaults)
+        if (map.getLayer("carriers")) map.setFilter("carriers", null);
+        if (map.getLayer("risk")) map.setFilter("risk", [">", ["get", "risk_score"], 0]);
+        if (map.getLayer("clusters")) map.setFilter("clusters", null);
+        if (map.getLayer("clusters-labels")) map.setFilter("clusters-labels", null);
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      applyFilter();
+    } else {
+      map.once("idle", applyFilter);
+      return () => { map.off("idle", applyFilter); };
+    }
+  }, [activeOnly, mapRef]);
+
+  // Sync demographics origin filter
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const applyOriginFilter = () => {
+      if (!map.getLayer("demographics")) return;
+      if (originFilter) {
+        map.setFilter("demographics", ["==", ["get", "dominant_origin"], originFilter]);
+      } else {
+        map.setFilter("demographics", ["has", "dominant_origin"]);
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      applyOriginFilter();
+    } else {
+      map.once("idle", applyOriginFilter);
+      return () => { map.off("idle", applyOriginFilter); };
+    }
+  }, [originFilter, mapRef]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

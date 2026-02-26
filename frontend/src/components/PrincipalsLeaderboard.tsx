@@ -44,6 +44,15 @@ const STATES = [
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
 ];
 
+interface OriginOption {
+  code: string;
+  name: string;
+  region: string;
+  officer_count: number;
+  carrier_count: number;
+  avg_risk: number;
+}
+
 export default function PrincipalsLeaderboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [entries, setEntries] = useState<PrincipalLeaderboardEntry[]>([]);
@@ -52,15 +61,25 @@ export default function PrincipalsLeaderboard() {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<PrincipalLeaderboardEntry[] | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [origins, setOrigins] = useState<OriginOption[]>([]);
 
   const state = searchParams.get("state") || "";
+  const origin = searchParams.get("origin") || "";
   const minCarriers = parseInt(searchParams.get("min") || "5", 10);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/principals/origins`)
+      .then((r) => r.json())
+      .then((data) => setOrigins(data))
+      .catch(() => {});
+  }, []);
 
   const loadEntries = () => {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams({ min_carriers: String(minCarriers), limit: "100" });
     if (state) params.set("state", state);
+    if (origin) params.set("origin", origin);
 
     fetch(`${API_URL}/api/principals/top?${params}`)
       .then((r) => {
@@ -74,7 +93,7 @@ export default function PrincipalsLeaderboard() {
       .catch((e) => { setError(e.message); setLoading(false); });
   };
 
-  useEffect(() => { loadEntries(); }, [state, minCarriers]);
+  useEffect(() => { loadEntries(); }, [state, origin, minCarriers]);
 
   const doSearch = () => {
     if (search.trim().length < 2) return;
@@ -190,6 +209,30 @@ export default function PrincipalsLeaderboard() {
         </select>
 
         <select
+          value={origin}
+          onChange={(e) => {
+            const p = new URLSearchParams(searchParams);
+            if (e.target.value) p.set("origin", e.target.value);
+            else p.delete("origin");
+            setSearchParams(p);
+          }}
+          style={{
+            padding: "6px 12px",
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            borderRadius: 6,
+            color: "var(--text-primary)",
+          }}
+        >
+          <option value="">All Origins</option>
+          {origins.map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.name} ({o.code}) — {o.officer_count.toLocaleString()}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={minCarriers}
           onChange={(e) => {
             const p = new URLSearchParams(searchParams);
@@ -230,7 +273,7 @@ export default function PrincipalsLeaderboard() {
           <button className="retry-btn" onClick={loadEntries}>Retry</button>
         </div>
       ) : entries.length === 0 ? (
-        <div className="history-empty">No officers found with {minCarriers}+ carriers{state ? ` in ${state}` : ""}</div>
+        <div className="history-empty">No officers found with {minCarriers}+ carriers{state ? ` in ${state}` : ""}{origin ? ` (origin: ${origin})` : ""}</div>
       ) : (
         <div className="history-scroll">
           <table className="history-table">

@@ -53,25 +53,19 @@ export default function SearchBar({ onFlyTo }: SearchBarProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleSelect = async (result: SearchResult) => {
+  const handleLocate = (e: React.MouseEvent, result: SearchResult) => {
+    e.stopPropagation();
+    if (result.latitude && result.longitude) {
+      setOpen(false);
+      setQuery(result.legal_name);
+      onFlyTo(result.longitude, result.latitude, 14);
+    }
+  };
+
+  const handleSelect = (result: SearchResult) => {
     setOpen(false);
     setQuery(result.legal_name);
-
-    // Fetch carrier to get location
-    try {
-      const res = await fetch(`${API_URL}/api/carriers/${result.dot_number}`);
-      if (res.ok) {
-        const carrier = await res.json();
-        if (carrier.latitude && carrier.longitude) {
-          onFlyTo(carrier.longitude, carrier.latitude, 14);
-        } else {
-          // No geocoded location — go to detail page
-          window.location.href = `/carrier/${result.dot_number}`;
-        }
-      }
-    } catch {
-      // ignore
-    }
+    window.location.href = `/carrier/${result.dot_number}`;
   };
 
   return (
@@ -93,12 +87,27 @@ export default function SearchBar({ onFlyTo }: SearchBarProps) {
               onClick={() => handleSelect(r)}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div className="search-result-name">{r.legal_name}</div>
-                {r.risk_score > 0 && (
-                  <span className={`risk-badge-sm ${r.risk_score >= 70 ? "risk-critical" : r.risk_score >= 50 ? "risk-high" : r.risk_score >= 30 ? "risk-medium" : "risk-low"}`}>
-                    {r.risk_score}
-                  </span>
-                )}
+                <div className="search-result-name" style={{ flex: 1 }}>{r.legal_name}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {r.latitude && r.longitude && (
+                    <button
+                      onClick={(e) => handleLocate(e, r)}
+                      title="Locate on map"
+                      style={{
+                        background: "none", border: "1px solid var(--border, #2e3344)",
+                        borderRadius: 4, padding: "2px 6px", cursor: "pointer",
+                        color: "var(--accent, #3b82f6)", fontSize: 12, lineHeight: 1,
+                      }}
+                    >
+                      &#x1F4CD;
+                    </button>
+                  )}
+                  {r.risk_score > 0 && (
+                    <span className={`risk-badge-sm ${r.risk_score >= 70 ? "risk-critical" : r.risk_score >= 50 ? "risk-high" : r.risk_score >= 30 ? "risk-medium" : "risk-low"}`}>
+                      {r.risk_score}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="search-result-meta">
                 DOT# {r.dot_number}

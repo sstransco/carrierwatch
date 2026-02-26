@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from database import get_conn
-from models import CarrierDetail, CarrierSummary, PaginatedResponse, PPPLoan, SearchResult, TopRiskCarrier
+from models import CarrierDetail, CarrierSummary, ChameleonPair, FraudRing, PaginatedResponse, PPPLoan, SearchResult, TopRiskCarrier
 
 router = APIRouter(prefix="/api/carriers", tags=["carriers"])
 
@@ -28,7 +28,9 @@ async def search_carriers(
         rows = await pool.fetch(
             """
             SELECT dot_number, legal_name, dba_name, physical_city, physical_state,
-                   operating_status, COALESCE(risk_score, 0) AS risk_score
+                   operating_status, COALESCE(risk_score, 0) AS risk_score,
+                   ST_Y(location::geometry) AS latitude,
+                   ST_X(location::geometry) AS longitude
             FROM carriers
             WHERE dot_number::text LIKE $1 || '%'
             ORDER BY dot_number
@@ -46,6 +48,8 @@ async def search_carriers(
                 operating_status=r["operating_status"],
                 risk_score=r["risk_score"],
                 match_type="dot",
+                latitude=r["latitude"],
+                longitude=r["longitude"],
             ))
         return results
 
@@ -56,7 +60,9 @@ async def search_carriers(
             rows = await pool.fetch(
                 """
                 SELECT dot_number, legal_name, dba_name, physical_city, physical_state,
-                       operating_status, COALESCE(risk_score, 0) AS risk_score
+                       operating_status, COALESCE(risk_score, 0) AS risk_score,
+                       ST_Y(location::geometry) AS latitude,
+                       ST_X(location::geometry) AS longitude
                 FROM carriers
                 WHERE mc_number LIKE $1 || '%'
                 ORDER BY dot_number
@@ -74,6 +80,8 @@ async def search_carriers(
                     operating_status=r["operating_status"],
                     risk_score=r["risk_score"],
                     match_type="mc",
+                    latitude=r["latitude"],
+                    longitude=r["longitude"],
                 ))
             return results
 
@@ -82,7 +90,9 @@ async def search_carriers(
         """
         SELECT dot_number, legal_name, dba_name, physical_city, physical_state,
                operating_status, COALESCE(risk_score, 0) AS risk_score,
-               similarity(legal_name, $1) AS sim
+               similarity(legal_name, $1) AS sim,
+               ST_Y(location::geometry) AS latitude,
+               ST_X(location::geometry) AS longitude
         FROM carriers
         WHERE legal_name % $1 OR legal_name ILIKE '%' || $1 || '%'
         ORDER BY sim DESC, legal_name
@@ -100,6 +110,8 @@ async def search_carriers(
             operating_status=r["operating_status"],
             risk_score=r["risk_score"],
             match_type="name",
+            latitude=r["latitude"],
+            longitude=r["longitude"],
         ))
 
     return results
@@ -146,47 +158,44 @@ async def top_risk_carriers(
     limit: int = Query(50, ge=1, le=200),
     min_score: int = Query(30, ge=0, le=100),
     state: str | None = None,
+    flag: str | None = None,
 ):
-    """Get carriers with the highest risk scores, optionally filtered by state."""
+    """Get carriers with the highest risk scores, optionally filtered by state and/or risk flag."""
     pool = await get_conn()
 
+    conditions = ["risk_score >= $1", "location IS NOT NULL"]
+    params: list = [min_score]
+    idx = 2
+
     if state:
-        rows = await pool.fetch(
-            """
-            SELECT dot_number, legal_name, physical_state,
-                   COALESCE(risk_score, 0) AS risk_score,
-                   COALESCE(risk_flags, '{}') AS risk_flags,
-                   COALESCE(power_units, 0) AS power_units,
-                   COALESCE(total_crashes, 0) AS total_crashes,
-                   operating_status,
-                   ST_Y(location::geometry) AS latitude,
-                   ST_X(location::geometry) AS longitude
-            FROM carriers
-            WHERE risk_score >= $1 AND location IS NOT NULL
-              AND physical_state = $3
-            ORDER BY risk_score DESC, total_crashes DESC
-            LIMIT $2
-            """,
-            min_score, limit, state.upper(),
-        )
-    else:
-        rows = await pool.fetch(
-            """
-            SELECT dot_number, legal_name, physical_state,
-                   COALESCE(risk_score, 0) AS risk_score,
-                   COALESCE(risk_flags, '{}') AS risk_flags,
-                   COALESCE(power_units, 0) AS power_units,
-                   COALESCE(total_crashes, 0) AS total_crashes,
-                   operating_status,
-                   ST_Y(location::geometry) AS latitude,
-                   ST_X(location::geometry) AS longitude
-            FROM carriers
-            WHERE risk_score >= $1 AND location IS NOT NULL
-            ORDER BY risk_score DESC, total_crashes DESC
-            LIMIT $2
-            """,
-            min_score, limit,
-        )
+        conditions.append(f"physical_state = ${idx}")
+        params.append(state.upper())
+        idx += 1
+
+    if flag:
+        conditions.append(f"${idx} = ANY(COALESCE(risk_flags, '{{}}'))")
+        params.append(flag)
+        idx += 1
+
+    conditions.append(f"LIMIT ${idx}")
+    params.append(limit)
+
+    where = " AND ".join(conditions[:-1])  # all except LIMIT
+    query = f"""
+        SELECT dot_number, legal_name, physical_state,
+               COALESCE(risk_score, 0) AS risk_score,
+               COALESCE(risk_flags, '{{}}') AS risk_flags,
+               COALESCE(power_units, 0) AS power_units,
+               COALESCE(total_crashes, 0) AS total_crashes,
+               operating_status,
+               ST_Y(location::geometry) AS latitude,
+               ST_X(location::geometry) AS longitude
+        FROM carriers
+        WHERE {where}
+        ORDER BY risk_score DESC, total_crashes DESC
+        LIMIT ${idx}
+    """
+    rows = await pool.fetch(query, *params)
 
     return [
         TopRiskCarrier(
@@ -424,6 +433,54 @@ async def get_carrier(dot_number: int):
             )
             for c in colocated
         ]
+
+    # Get chameleon pairs (table may not exist yet)
+    try:
+        cham_rows = await pool.fetch(
+            """
+            SELECT cp.id, cp.predecessor_dot, cp.successor_dot,
+                   pred.legal_name AS predecessor_name,
+                   succ.legal_name AS successor_name,
+                   cp.deactivation_date, cp.activation_date,
+                   cp.days_gap, cp.match_signals, cp.signal_count, cp.confidence
+            FROM chameleon_pairs cp
+            LEFT JOIN carriers pred ON cp.predecessor_dot = pred.dot_number
+            LEFT JOIN carriers succ ON cp.successor_dot = succ.dot_number
+            WHERE cp.predecessor_dot = $1 OR cp.successor_dot = $1
+            ORDER BY cp.signal_count DESC
+            LIMIT 20
+            """,
+            dot_number,
+        )
+        carrier.chameleon_pairs = [ChameleonPair(**dict(r)) for r in cham_rows]
+    except Exception:
+        pass
+
+    # Get fraud rings (table may not exist yet)
+    try:
+        ring_rows = await pool.fetch(
+            """
+            SELECT ring_id, carrier_dots, officer_names, shared_addresses,
+                   carrier_count, active_count, total_crashes, total_fatalities,
+                   combined_risk, confidence
+            FROM fraud_rings
+            WHERE $1 = ANY(carrier_dots)
+            ORDER BY combined_risk DESC
+            LIMIT 10
+            """,
+            dot_number,
+        )
+        carrier.fraud_rings = [FraudRing(**dict(r)) for r in ring_rows]
+    except Exception:
+        pass
+
+    # Peer benchmarks (columns may not exist yet)
+    try:
+        carrier.peer_crash_percentile = float(row["peer_crash_percentile"]) if row.get("peer_crash_percentile") else None
+        carrier.peer_oos_percentile = float(row["peer_oos_percentile"]) if row.get("peer_oos_percentile") else None
+        carrier.fleet_size_bucket = row.get("fleet_size_bucket")
+    except (KeyError, TypeError):
+        pass
 
     return carrier
 

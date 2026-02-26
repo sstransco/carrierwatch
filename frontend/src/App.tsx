@@ -3,6 +3,7 @@ import Map from "./components/Map";
 import SearchBar from "./components/SearchBar";
 import Sidebar from "./components/Sidebar";
 import LayerToggle from "./components/LayerToggle";
+import SupportBanner from "./components/SupportBanner";
 import type { MapLayer, StatsResponse } from "./types";
 import type mapboxgl from "mapbox-gl";
 
@@ -11,9 +12,11 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 const DEFAULT_LAYERS: MapLayer[] = [
   { id: "risk", label: "Risk Overlay", visible: true },
   { id: "clusters", label: "Address Clusters", visible: true },
-  { id: "carriers", label: "Individual Carriers", visible: false },
+  { id: "carriers", label: "Individual Carriers", visible: true },
+  { id: "foreign-carriers", label: "Foreign Carriers", visible: false },
   { id: "heatmap", label: "Heatmap", visible: false },
   { id: "cdl-schools", label: "CDL Schools", visible: true },
+  { id: "demographics", label: "Demographics", visible: false },
 ];
 
 export default function App() {
@@ -21,6 +24,8 @@ export default function App() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [activeOnly, setActiveOnly] = useState(true);
+  const [originFilter, setOriginFilter] = useState("");
   const mapRef = useRef<mapboxgl.Map | null>(null);
 
   useEffect(() => {
@@ -54,9 +59,17 @@ export default function App() {
         <a href="/" className="topbar-brand">
           Carrier<span>Watch</span>
         </a>
-        <a href="/principals" className="topbar-link">Officers</a>
+        <div className="topbar-dropdown">
+          <button className="topbar-link topbar-link-accent topbar-dropdown-btn">Fraud Tools &#9662;</button>
+          <div className="topbar-dropdown-menu">
+            <a href="/fraud-intel" className="topbar-dropdown-item">Fraud Intel</a>
+            <a href="/international" className="topbar-dropdown-item">International</a>
+            <a href="/principals" className="topbar-dropdown-item">Officers</a>
+            <a href="/spotlight" className="topbar-dropdown-item">Spotlight</a>
+          </div>
+        </div>
+        <a href="/demographics" className="topbar-link">Demographics</a>
         <a href="/cdl-schools" className="topbar-link">CDL Schools</a>
-        <a href="/spotlight" className="topbar-link topbar-link-accent">Spotlight</a>
         <a href="/about" className="topbar-link">About</a>
         <a href="https://x.com/sigma2transport" target="_blank" rel="noopener" className="topbar-link">Follow Us</a>
         <SearchBar onFlyTo={handleFlyTo} />
@@ -84,14 +97,15 @@ export default function App() {
           </div>
         )}
       </div>
+      <SupportBanner />
       <div className="main-content">
         {sidebarOpen && <div className="sidebar-overlay visible" onClick={() => setSidebarOpen(false)} />}
         {!sidebarCollapsed && (
-          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onFlyTo={handleFlyTo} />
+          <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onFlyTo={handleFlyTo} activeOnly={activeOnly} />
         )}
         <div className="map-container">
-          <Map mapRef={mapRef} layers={layers} />
-          <LayerToggle layers={layers} onToggle={handleLayerToggle} />
+          <Map mapRef={mapRef} layers={layers} activeOnly={activeOnly} originFilter={originFilter} />
+          <LayerToggle layers={layers} onToggle={handleLayerToggle} activeOnly={activeOnly} onActiveOnlyChange={setActiveOnly} originFilter={originFilter} onOriginFilterChange={setOriginFilter} />
           <button
             className="sidebar-toggle-btn"
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}

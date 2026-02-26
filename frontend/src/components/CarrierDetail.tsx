@@ -40,7 +40,16 @@ function formatFlag(flag: string): string {
     .replace("OFFICER 25 PLUS", "Officer linked to 25+ carriers")
     .replace("OFFICER 10 PLUS", "Officer linked to 10+ carriers")
     .replace("OFFICER 5 PLUS", "Officer linked to 5+ carriers")
-    .replace("ELD VIOLATIONS 5 PLUS", "5+ ELD/HOS violations");
+    .replace("ELD VIOLATIONS 5 PLUS", "5+ ELD/HOS violations")
+    .replace("HIGH ELD VIOLATION RATE", "High ELD violation rate per inspection")
+    .replace("FOREIGN LINKED ADDRESS", "Shares address with foreign carrier")
+    .replace("FOREIGN LINKED OFFICER", "Shares officer with foreign carrier")
+    .replace("FOREIGN MAILING", "Domestic carrier with foreign mailing address")
+    .replace("FOREIGN CARRIER", "Foreign-registered carrier")
+    .replace("CHAMELEON SUCCESSOR", "Chameleon: reopened under new DOT")
+    .replace("CHAMELEON PREDECESSOR", "Chameleon: predecessor carrier")
+    .replace("FRAUD RING", "Part of fraud ring network")
+    .replace(/ADDRESS OVERLAP (\d+)\+/, "Address shared by $1+ carriers");
 }
 
 const WEATHER: Record<number, string> = {
@@ -556,6 +565,27 @@ export default function CarrierDetailPage() {
           <div className="detail-row"><span className="label">Injury Crashes</span><span className="value" style={carrier.injury_crashes > 0 ? { color: "var(--warning)" } : undefined}>{carrier.injury_crashes}</span></div>
           <div className="detail-row"><span className="label">Driver OOS Rate</span><span className="value" style={carrier.driver_oos_rate > 20 ? { color: "var(--danger)" } : undefined}>{carrier.driver_oos_rate.toFixed(1)}%</span></div>
           <div className="detail-row"><span className="label">HazMat OOS Rate</span><span className="value">{carrier.hazmat_oos_rate.toFixed(1)}%</span></div>
+          {carrier.fleet_size_bucket && carrier.peer_crash_percentile != null && (
+            <>
+              <div style={{ borderTop: "1px solid var(--border)", margin: "10px 0 6px", paddingTop: 8 }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: 0.5 }}>Peer Benchmarks ({carrier.fleet_size_bucket} units)</span>
+              </div>
+              <div className="detail-row">
+                <span className="label">Crash Percentile</span>
+                <span className="value" style={carrier.peer_crash_percentile >= 90 ? { color: "var(--danger)", fontWeight: 700 } : undefined}>
+                  {carrier.peer_crash_percentile.toFixed(0)}th
+                </span>
+              </div>
+              {carrier.peer_oos_percentile != null && (
+                <div className="detail-row">
+                  <span className="label">OOS Percentile</span>
+                  <span className="value" style={carrier.peer_oos_percentile >= 90 ? { color: "var(--danger)", fontWeight: 700 } : undefined}>
+                    {carrier.peer_oos_percentile.toFixed(0)}th
+                  </span>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         <div className="detail-card">
@@ -622,6 +652,69 @@ export default function CarrierDetailPage() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {carrier.chameleon_pairs && carrier.chameleon_pairs.length > 0 && (
+        <div className="colocated-section">
+          <h2>Chameleon Carrier Links ({carrier.chameleon_pairs.length})</h2>
+          <div className="colocated-warning">
+            This carrier has been linked to potential chameleon carrier activity &mdash;
+            carriers that shut down and reopen under new DOT numbers to evade safety records.
+          </div>
+          {carrier.chameleon_pairs.map((cp) => {
+            const isPredecessor = cp.predecessor_dot === carrier.dot_number;
+            const linkedDot = isPredecessor ? cp.successor_dot : cp.predecessor_dot;
+            const linkedName = isPredecessor ? cp.successor_name : cp.predecessor_name;
+            return (
+              <Link key={cp.id} to={`/carrier/${linkedDot}`} className="carrier-list-item">
+                <div>
+                  <div style={{ fontWeight: 500 }}>
+                    {isPredecessor ? "Successor" : "Predecessor"}: {linkedName || `DOT ${linkedDot}`}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    DOT# {linkedDot} · {cp.days_gap != null ? `${cp.days_gap}d gap` : "unknown gap"} · {cp.match_signals.join(", ")}
+                  </div>
+                </div>
+                <span className={`risk-badge-sm ${cp.confidence === "high" ? "risk-critical" : cp.confidence === "medium" ? "risk-high" : "risk-medium"}`}>
+                  {cp.confidence.toUpperCase()}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      {carrier.fraud_rings && carrier.fraud_rings.length > 0 && (
+        <div className="colocated-section">
+          <h2>Fraud Ring Membership ({carrier.fraud_rings.length})</h2>
+          <div className="colocated-warning">
+            This carrier belongs to a network of carriers connected by shared officers,
+            which may indicate coordinated fraud or evasion of safety regulations.
+          </div>
+          {carrier.fraud_rings.map((ring) => (
+            <div key={ring.ring_id} className="carrier-list-item" style={{ flexDirection: "column", alignItems: "stretch", cursor: "default" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontWeight: 500 }}>Ring #{ring.ring_id} &mdash; {ring.carrier_count} carriers</div>
+                <span className={`risk-badge-sm ${ring.confidence === "high" ? "risk-critical" : ring.confidence === "medium" ? "risk-high" : "risk-medium"}`}>
+                  {ring.confidence.toUpperCase()}
+                </span>
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
+                {ring.active_count} active · {ring.total_crashes} crashes · {ring.total_fatalities} fatalities · combined risk {ring.combined_risk}
+              </div>
+              <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                {ring.carrier_dots.filter((d) => d !== carrier.dot_number).slice(0, 8).map((d) => (
+                  <Link key={d} to={`/carrier/${d}`} style={{ fontSize: 11, color: "#60a5fa" }}>
+                    {d}
+                  </Link>
+                ))}
+                {ring.carrier_dots.length > 9 && (
+                  <span style={{ fontSize: 11, color: "#666" }}>+{ring.carrier_dots.length - 9} more</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

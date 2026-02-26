@@ -53,7 +53,11 @@ BEGIN
             WHEN ac.carrier_count >= 5 THEN 20
             ELSE 0
         END,
-        risk_flags = array_append(risk_flags, 'ADDRESS_OVERLAP_' || ac.carrier_count)
+        risk_flags = array_append(risk_flags, CASE
+            WHEN ac.carrier_count >= 25 THEN 'ADDRESS_OVERLAP_25+'
+            WHEN ac.carrier_count >= 10 THEN 'ADDRESS_OVERLAP_10+'
+            ELSE 'ADDRESS_OVERLAP_5+'
+        END)
     FROM address_clusters ac
     WHERE c.address_hash = ac.address_hash
       AND ac.carrier_count >= 5;

@@ -40,6 +40,76 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Support Banner */
+.support-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: #1a2a1a;
+  border-bottom: 1px solid #2d4a2d;
+  font-size: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.support-banner-label {
+  color: var(--success);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.support-addr-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #0f1f0f;
+  border: 1px solid #2d4a2d;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+  font-size: 12px;
+  transition: border-color 0.15s;
+}
+
+.support-addr-btn:hover {
+  border-color: var(--success);
+}
+
+.support-coin {
+  color: var(--success);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.support-addr {
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.support-copy {
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.support-banner-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.support-banner-close:hover {
+  color: var(--text-primary);
+}
+
 /* Layout */
 .app-layout {
   display: flex;
@@ -92,6 +162,46 @@ body {
 }
 .topbar-link-accent:hover {
   color: #fbbf24;
+}
+
+/* Fraud Tools dropdown */
+.topbar-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+.topbar-dropdown-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.topbar-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 160px;
+  padding: 4px 0;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.topbar-dropdown:hover .topbar-dropdown-menu {
+  display: block;
+}
+.topbar-dropdown-item {
+  display: block;
+  padding: 8px 16px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+.topbar-dropdown-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .main-content {
@@ -1358,4 +1468,72 @@ body {
   .about-hero h1 {
     font-size: 28px;
   }
+}
+
+/* Fraud Intel page */
+.stat-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+.stat-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.data-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+.data-table tbody tr:hover {
+  background: var(--bg-tertiary);
+}
+.carrier-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.carrier-link:hover {
+  text-decoration: underline;
+}
+.flag-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+  font-weight: 500;
 }

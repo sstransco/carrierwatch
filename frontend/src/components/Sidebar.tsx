@@ -6,9 +6,10 @@ interface SidebarProps {
   onFlyTo: (lng: number, lat: number, zoom?: number) => void;
   open?: boolean;
   onClose?: () => void;
+  activeOnly: boolean;
 }
 
-export default function Sidebar({ onFlyTo, open, onClose }: SidebarProps) {
+export default function Sidebar({ onFlyTo, open, onClose, activeOnly }: SidebarProps) {
   const [activeTab, setActiveTab] = useState<"leaderboard" | "risk">("leaderboard");
 
   return (
@@ -30,7 +31,7 @@ export default function Sidebar({ onFlyTo, open, onClose }: SidebarProps) {
       </div>
       <div className="sidebar-content">
         {activeTab === "leaderboard" ? (
-          <Leaderboard onFlyTo={onFlyTo} />
+          <Leaderboard onFlyTo={onFlyTo} activeOnly={activeOnly} />
         ) : (
           <RiskLeaderboard onFlyTo={onFlyTo} />
         )}

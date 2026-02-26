@@ -142,7 +142,7 @@ def parse_inspections(csv_path, conn):
 
     batch = []
     total = 0
-    batch_size = 10000
+    batch_size = 50000
 
     with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -223,7 +223,7 @@ def parse_crashes(csv_path, conn):
 
     batch = []
     total = 0
-    batch_size = 10000
+    batch_size = 50000
 
     with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -306,7 +306,7 @@ def parse_authority(csv_path, conn):
 
     batch = []
     total = 0
-    batch_size = 10000
+    batch_size = 50000
 
     with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -381,7 +381,7 @@ def parse_insurance(csv_path, conn):
 
     batch = []
     total = 0
-    batch_size = 10000
+    batch_size = 50000
 
     with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
         reader = csv.DictReader(f)
@@ -439,6 +439,11 @@ def main():
     conn = psycopg2.connect(DATABASE_URL)
 
     try:
+        # Disable FK constraint checks for bulk load (re-enabled on session close)
+        with conn.cursor() as cur:
+            cur.execute("SET session_replication_role = 'replica'")
+        conn.commit()
+
         for target in targets:
             if target not in DATASETS:
                 log.warning("Unknown dataset: %s", target)
@@ -481,21 +486,27 @@ def main():
         # Update risk flags based on new data
         log.info("Updating insurance-based risk flags...")
         with conn.cursor() as cur:
-            # Flag carriers with cancelled/lapsed insurance
+            # Flag AUTHORIZED carriers with no currently-active insurance policy.
+            # Only flags carriers that HAD insurance at some point (not new carriers).
             cur.execute("""
                 UPDATE carriers c SET
                     risk_score = risk_score + 20,
                     risk_flags = array_append(risk_flags, 'INSURANCE_LAPSE')
                 WHERE c.dot_number IN (
-                    SELECT DISTINCT ih.dot_number
-                    FROM insurance_history ih
-                    WHERE ih.cancl_effective_date IS NOT NULL
-                      AND ih.cancl_effective_date < CURRENT_DATE
-                      AND ih.dot_number NOT IN (
-                          SELECT dot_number FROM insurance_history
-                          WHERE effective_date > ih.cancl_effective_date
-                            AND cancl_effective_date IS NULL
-                      )
+                    SELECT DISTINCT c2.dot_number
+                    FROM carriers c2
+                    WHERE c2.operating_status ILIKE 'AUTHORIZED%%'
+                      AND NOT EXISTS (
+                        SELECT 1 FROM insurance_history ih
+                        WHERE ih.dot_number = c2.dot_number
+                          AND ih.effective_date <= CURRENT_DATE
+                          AND (ih.cancl_effective_date IS NULL
+                               OR ih.cancl_effective_date > CURRENT_DATE)
+                    )
+                    AND EXISTS (
+                        SELECT 1 FROM insurance_history ih3
+                        WHERE ih3.dot_number = c2.dot_number
+                    )
                 )
                 AND NOT ('INSURANCE_LAPSE' = ANY(c.risk_flags))
             """)

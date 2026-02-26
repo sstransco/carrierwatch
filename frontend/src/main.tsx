@@ -11,6 +11,9 @@ const PrincipalsLeaderboard = lazy(() => import("./components/PrincipalsLeaderbo
 const CDLSchoolsPage = lazy(() => import("./components/CDLSchools"));
 const NetworkGraphPage = lazy(() => import("./components/NetworkGraph"));
 const FraudSpotlightPage = lazy(() => import("./components/FraudSpotlight"));
+const InternationalPage = lazy(() => import("./components/International"));
+const FraudIntelPage = lazy(() => import("./components/FraudIntel"));
+const DemographicsPage = lazy(() => import("./components/Demographics"));
 
 const Loading = () => (
   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#0a0a0a", color: "#888" }}>
@@ -31,6 +34,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
           <Route path="/network/:officerName" element={<NetworkGraphPage />} />
           <Route path="/network" element={<NetworkGraphPage />} />
           <Route path="/spotlight" element={<FraudSpotlightPage />} />
+          <Route path="/international" element={<InternationalPage />} />
+          <Route path="/international/:countryCode" element={<InternationalPage />} />
+          <Route path="/fraud-intel" element={<FraudIntelPage />} />
+          <Route path="/demographics" element={<DemographicsPage />} />
           <Route path="/about" element={<AboutPage />} />
         </Routes>
       </Suspense>

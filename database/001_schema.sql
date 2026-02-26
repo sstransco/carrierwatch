@@ -146,6 +146,7 @@ BEGIN
             total_crashes,
             vehicle_oos_rate,
             COALESCE(risk_score, 0) AS risk_score,
+            COALESCE(physical_country, 'US') AS physical_country,
             ST_AsMVTGeom(
                 ST_Transform(location::geometry, 3857),
                 bounds,

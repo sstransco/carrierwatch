@@ -12,6 +12,7 @@ const US_STATES = [
 
 interface LeaderboardProps {
   onFlyTo: (lng: number, lat: number, zoom?: number) => void;
+  activeOnly: boolean;
 }
 
 function countClass(count: number): string {
@@ -21,11 +22,14 @@ function countClass(count: number): string {
   return "count-low";
 }
 
-export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
+export default function Leaderboard({ onFlyTo, activeOnly }: LeaderboardProps) {
   const [stateFilter, setStateFilter] = useState("");
+  const [sortBy, setSortBy] = useState<"total" | "active">("total");
 
   const params = new URLSearchParams({ limit: "100" });
   if (stateFilter) params.set("state", stateFilter);
+  if (activeOnly) params.set("active_only", "true");
+  if (sortBy === "active") params.set("sort", "active");
   const { data: clusters, loading, error, retry } = useFetch<AddressCluster[]>(
     `/api/addresses/top-flagged?${params}`
   );
@@ -49,6 +53,20 @@ export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
           {US_STATES.filter(Boolean).map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
+        </select>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        <select
+          style={{
+            background: "var(--bg-tertiary, #242834)", border: "1px solid var(--border, #2e3344)",
+            borderRadius: 6, padding: "4px 8px", color: "var(--text-primary)", fontSize: 12,
+          }}
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as "total" | "active")}
+        >
+          <option value="total">Sort by total count</option>
+          <option value="active">Sort by active count</option>
         </select>
       </div>
 
@@ -77,7 +95,8 @@ export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
             <tr>
               <th>#</th>
               <th>Address</th>
-              <th>Count</th>
+              <th>Active</th>
+              <th>Total</th>
               <th>Crashes</th>
             </tr>
           </thead>
@@ -94,10 +113,11 @@ export default function Leaderboard({ onFlyTo }: LeaderboardProps) {
                   </div>
                 </td>
                 <td>
-                  <span className={`leaderboard-count ${countClass(c.carrier_count)}`}>
-                    {c.carrier_count}
+                  <span className={`leaderboard-count ${countClass(c.active_count)}`}>
+                    {c.active_count}
                   </span>
                 </td>
+                <td style={{ color: "var(--text-secondary)", fontSize: 12 }}>{c.carrier_count}</td>
                 <td>{c.total_crashes}</td>
               </tr>
             ))}

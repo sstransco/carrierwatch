@@ -26,6 +26,54 @@ export interface PPPLoan {
   match_confidence: string | null;
 }
 
+export interface ChameleonPair {
+  id: number;
+  predecessor_dot: number;
+  successor_dot: number;
+  predecessor_name: string | null;
+  successor_name: string | null;
+  deactivation_date: string | null;
+  activation_date: string | null;
+  days_gap: number | null;
+  match_signals: string[];
+  signal_count: number;
+  confidence: string;
+}
+
+export interface FraudRing {
+  ring_id: number;
+  carrier_dots: number[];
+  officer_names: string[];
+  shared_addresses: string[];
+  carrier_count: number;
+  active_count: number;
+  total_crashes: number;
+  total_fatalities: number;
+  combined_risk: number;
+  confidence: string;
+}
+
+export interface InsuranceCompanyStats {
+  insurance_company: string;
+  carriers_insured: number;
+  total_policies: number;
+  cancellations: number;
+  cancellation_rate: number;
+  high_risk_carriers: number;
+  avg_carrier_risk: number;
+  total_crashes: number;
+}
+
+export interface FraudIntelStats {
+  total_chameleon_pairs: number;
+  high_confidence_pairs: number;
+  medium_confidence_pairs: number;
+  total_fraud_rings: number;
+  high_confidence_rings: number;
+  carriers_in_rings: number;
+  insurance_companies: number;
+}
+
 export interface CarrierDetail extends CarrierSummary {
   mc_number: string | null;
   carrier_operation: string | null;
@@ -61,6 +109,11 @@ export interface CarrierDetail extends CarrierSummary {
   ppp_forgiven_total: number;
   ppp_loans: PPPLoan[];
   colocated_carriers: CarrierSummary[];
+  chameleon_pairs: ChameleonPair[];
+  fraud_rings: FraudRing[];
+  peer_crash_percentile: number | null;
+  peer_oos_percentile: number | null;
+  fleet_size_bucket: string | null;
 }
 
 export interface AddressCluster {
@@ -113,6 +166,8 @@ export interface SearchResult {
   operating_status: string | null;
   risk_score: number;
   match_type: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -154,4 +209,36 @@ export interface MapLayer {
   id: string;
   label: string;
   visible: boolean;
+}
+
+export interface CountryBreakdown {
+  country: string;
+  carrier_count: number;
+  active_count: number;
+  high_risk_count: number;
+  avg_risk: number;
+  total_crashes: number;
+}
+
+export interface InternationalStats {
+  total_foreign: number;
+  linked_officer: number;
+  linked_address: number;
+  foreign_mailing: number;
+  high_risk_foreign: number;
+  countries: CountryBreakdown[];
+}
+
+export interface InternationalCarrier {
+  dot_number: number;
+  legal_name: string;
+  physical_country: string;
+  physical_state: string | null;
+  risk_score: number;
+  risk_flags: string[];
+  power_units: number;
+  total_crashes: number;
+  operating_status: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }

@@ -11,6 +11,25 @@ const STATES = [
   "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
 ];
 
+const RISK_FLAGS = [
+  { value: "", label: "All Flags" },
+  { value: "FOREIGN_CARRIER", label: "Foreign Carrier" },
+  { value: "FOREIGN_LINKED_OFFICER", label: "Foreign Linked Officer" },
+  { value: "FOREIGN_LINKED_ADDRESS", label: "Foreign Linked Address" },
+  { value: "FOREIGN_MAILING", label: "Foreign Mailing" },
+  { value: "FATAL_CRASHES", label: "Fatal Crashes" },
+  { value: "HIGH_ELD_VIOLATION_RATE", label: "High ELD Rate" },
+  { value: "ELD_VIOLATIONS_5_PLUS", label: "ELD Violations 5+" },
+  { value: "OFFICER_25_PLUS", label: "Officer 25+ Carriers" },
+  { value: "OFFICER_10_PLUS", label: "Officer 10+ Carriers" },
+  { value: "LARGE_PPP_LOAN", label: "Large PPP Loan" },
+  { value: "INSURANCE_LAPSE", label: "Insurance Lapse" },
+  { value: "HIGH_VEHICLE_OOS", label: "High Vehicle OOS" },
+  { value: "HIGH_DRIVER_OOS", label: "High Driver OOS" },
+  { value: "AUTHORITY_REVOKED_REISSUED", label: "Authority Revoked" },
+  { value: "PO_BOX_ADDRESS", label: "PO Box Address" },
+];
+
 interface RiskLeaderboardProps {
   onFlyTo: (lng: number, lat: number, zoom?: number) => void;
 }
@@ -25,15 +44,17 @@ function riskClass(score: number): string {
 
 export default function RiskLeaderboard({ onFlyTo }: RiskLeaderboardProps) {
   const [state, setState] = useState<string>("");
+  const [flag, setFlag] = useState<string>("");
   const [carriers, setCarriers] = useState<TopRiskCarrier[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!state) { setCarriers([]); return; }
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ limit: "50", min_score: "30", state });
+    const params = new URLSearchParams({ limit: "50", min_score: "30" });
+    if (state) params.set("state", state);
+    if (flag) params.set("flag", flag);
     fetch(`${API_URL}/api/carriers/top-risk?${params}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -41,7 +62,7 @@ export default function RiskLeaderboard({ onFlyTo }: RiskLeaderboardProps) {
       })
       .then((data) => { setCarriers(data); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
-  }, [state]);
+  }, [state, flag]);
 
   const handleClick = (carrier: TopRiskCarrier) => {
     if (carrier.latitude && carrier.longitude) {
@@ -65,6 +86,19 @@ export default function RiskLeaderboard({ onFlyTo }: RiskLeaderboardProps) {
         </select>
       </div>
 
+      <div className="filter-group">
+        <label>Filter by Risk Flag</label>
+        <select
+          className="filter-select"
+          value={flag}
+          onChange={(e) => setFlag(e.target.value)}
+        >
+          {RISK_FLAGS.map((f) => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
+      </div>
+
       {loading ? (
         <div className="skeleton-rows">
           {[...Array(8)].map((_, i) => (
@@ -82,12 +116,12 @@ export default function RiskLeaderboard({ onFlyTo }: RiskLeaderboardProps) {
         <div className="error-state">
           <div className="error-title">Failed to load</div>
           <p>{error}</p>
-          <button className="retry-btn" onClick={() => setState(state)}>Retry</button>
+          <button className="retry-btn" onClick={() => { setState(state); setFlag(flag); }}>Retry</button>
         </div>
-      ) : !state ? (
-        <div className="loading" style={{ textAlign: "center", padding: "20px 0" }}>Select a state to view top risk carriers</div>
       ) : carriers.length === 0 ? (
-        <div className="loading">No high-risk carriers found in {state}</div>
+        <div className="loading" style={{ textAlign: "center", padding: "20px 0" }}>
+          No carriers found{state ? ` in ${state}` : ""}{flag ? ` with ${flag.replace(/_/g, " ").toLowerCase()}` : ""}
+        </div>
       ) : (
         <table className="leaderboard-table">
           <thead>
